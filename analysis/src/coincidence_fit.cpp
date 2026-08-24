@@ -92,9 +92,9 @@ int main(int argc, char** argv) {
 
         c->cd(pad_idx);
         
-        // 0 ~ 700 us の範囲で 100 ビン (1bin = 7 us)
+        // 0 ~ 800 us の範囲で 114 ビン (1bin = 7.02 us)
         std::string hist_name = Form("h_q1_%d_%d", (int)q_min, (int)q_max);
-        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 100, 0, 700);
+        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 114, 0, 800);
         h->SetLineColor(kBlack);
         h->SetLineWidth(2);
 
@@ -114,14 +114,15 @@ int main(int argc, char** argv) {
         h->SetMaximum(local_max * 1.25);
 
         // フィット関数: [0]*exp(-x/[1]) + [2] (指数関数 + 定数項)
-        // フィット範囲: 10 ~ 600 us
-        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 600.0);
+        // フィット範囲: 10 ~ 780 us
+        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 780.0);
         
-        Double_t bg_est = h->GetBinContent(95); // 665 us 付近の値をバックグラウンド初期値とする
+        Double_t bg_est = h->GetBinContent(108); // 756 us 付近の値をバックグラウンド初期値とする
         f_exp->SetParameters(local_max - bg_est, 30.0, bg_est);
-        f_exp->SetParLimits(1, 1.0, 500.0); // 探索リミッターの上限を 500 us に設定
+        f_exp->SetParLimits(1, 1.0, 700.0); // 探索リミッターの上限を 700 us に設定
 
-        h->Fit(f_exp, "R Q");
+        // "E" オプション (MINOS不確かさ評価法) を追加して粘り強くフィットを実行
+        h->Fit(f_exp, "R Q E");
 
         Double_t tau = f_exp->GetParameter(1);
         Double_t tau_err = f_exp->GetParError(1);
@@ -139,7 +140,7 @@ int main(int argc, char** argv) {
         latex.DrawLatex(0.45, 0.68, Form("BG = %.1f #pm %.1f", f_exp->GetParameter(2), f_exp->GetParError(2)));
 
         // グラフ用データに追加 (フィット結果が妥当な場合のみ)
-        if (tau > 2.0 && tau < 500.0 && tau_err < tau * 0.5) {
+        if (tau > 2.0 && tau < 700.0 && tau_err < tau * 0.5) {
             vec_q1.push_back(q_min + (q_max - q_min) / 2.0);
             vec_q1_err.push_back((q_max - q_min) / 2.0);
             vec_tau.push_back(tau);
