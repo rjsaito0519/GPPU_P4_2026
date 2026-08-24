@@ -121,8 +121,8 @@ int main(int argc, char** argv) {
         f_exp->SetParameters(local_max - bg_est, 30.0, bg_est);
         f_exp->SetParLimits(1, 1.0, 700.0); // 探索リミッターの上限を 700 us に設定
 
-        // "E" オプション (MINOS不確かさ評価法) を追加して粘り強くフィットを実行
-        h->Fit(f_exp, "R Q E");
+        // "E" オプションは一部の統計不足ゲートで警告を出す原因になるため、標準の HESSE フィットを実行
+        h->Fit(f_exp, "R Q");
 
         Double_t tau = f_exp->GetParameter(1);
         Double_t tau_err = f_exp->GetParError(1);
