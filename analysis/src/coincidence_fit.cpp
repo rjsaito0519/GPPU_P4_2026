@@ -256,23 +256,6 @@ int main(int argc, char** argv) {
     }
 
     // PDF 終了
-    c->Print((pdf_path + "]").c_str());>SetMarkerColor(kBlue);
-        gr->SetLineColor(kBlue);
-        gr->SetLineWidth(2);
-        
-        // 縦軸レンジの自動最適化 (得られた最大のtauに応じてマージンを調整、最低でも 50.0 us は確保)
-        Double_t max_tau = *std::max_element(vec_tau.begin(), vec_tau.end());
-        gr->GetYaxis()->SetRangeUser(0.0, std::max(50.0, max_tau * 1.25));
-        gr->GetXaxis()->SetRangeUser(0.0, 50.0); // Q1の上限は50まで
-        
-        gr->Draw("AP");
-        c->Print(pdf_path.c_str());
-        delete gr;
-    } else {
-        std::cerr << "Warning: No valid fit points to plot on summary graph." << std::endl;
-    }
-
-    // PDF 終了
     c->Print((pdf_path + "]").c_str());
 
     std::cout << "Coincidence fit completed. Results saved to: " << pdf_path << std::endl;
