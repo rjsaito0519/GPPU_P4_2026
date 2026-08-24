@@ -101,11 +101,11 @@ int main(int argc, char** argv) {
         tree->Draw(Form("delta_T_us>>%s", hist_name.c_str()), gate_cut.c_str(), "goff");
 
         // -----------------------------------------------------------------
-        // Y軸の最大値を調整: 0 ~ 30 us 付近の巨大ノイズを除外した30us以降の最大値の 1.25 倍に設定
-        // (1bin = 8.0us なので、30us は 3.75bin目付近。安全のため5bin目(32us~)以降の最大値を探す)
+        // Y軸の最大値を調整: 0 ~ 10 us 付近の巨大ノイズを除外した10us以降の最大値の 1.25 倍に設定
+        // (1bin = 8.0us なので、10us は 2bin目の途中。安全のため3bin目(16us~)以降の最大値を探す)
         // -----------------------------------------------------------------
         Double_t local_max = 0.0;
-        for (int bin = 5; bin <= h->GetNbinsX(); ++bin) {
+        for (int bin = 3; bin <= h->GetNbinsX(); ++bin) {
             Double_t content = h->GetBinContent(bin);
             if (content > local_max) {
                 local_max = content;
@@ -113,24 +113,24 @@ int main(int argc, char** argv) {
         }
         h->SetMaximum(local_max * 1.25);
 
-        // フィット関数: [0]*exp(-x/[1]) + [2] (指数関数 + 定数項)
-        // フィット範囲: 30 ~ 780 us
-        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
+        // フィット範囲: 10 ~ 780 us
+        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 780.0);
         
-        // 500 ~ 800 us (70bin から 100bin) の平均値をバックグラウンド初期値とする
-        Double_t bg_est = 0.0;
-        int bg_bins = 0;
-        for (int bin = 70; bin <= h->GetNbinsX(); ++bin) {
-            bg_est += h->GetBinContent(bin);
-            bg_bins++;
-        }
-        if (bg_bins > 0) bg_est /= bg_bins;
+        // 800 ~ 900 us のバックグラウンド推定値を一時ヒストグラムから計算
+        std::string bg_hist_name = Form("h_bg_%s", hist_name.c_str());
+        TH1D* h_bg = new TH1D(bg_hist_name.c_str(), "", 10, 800, 900);
+        tree->Draw(Form("delta_T_us>>%s", bg_hist_name.c_str()), gate_cut.c_str(), "goff");
+        Double_t bg_est = h_bg->Integral() / 10.0;
+        delete h_bg;
+
+        Double_t bg_min = std::max(0.0, bg_est * 0.9);
+        Double_t bg_max = bg_est * 1.1 + 1.0;
 
         // 時定数 tau の初期値は、実際のスケールに合わせた 120.0 us を設定
         f_exp->SetParameters(local_max - bg_est, 120.0, bg_est);
         f_exp->SetParLimits(0, 0.0, local_max * 2.0); // 振幅に安全制限を設定
         f_exp->SetParLimits(1, 1.0, 700.0);           // 時定数の上限を 700 us に設定
-        f_exp->FixParameter(2, bg_est);               // 背景を固定してフィッティングを劇的に安定化
+        f_exp->SetParLimits(2, bg_min, bg_max);       // 背景は推定BG値の前後10%の微調整のみを許容
 
         // 2段階フィットに L オプション (ポアソン対数尤度フィット) を追加して誤差を安定化
         h->Fit(f_exp, "R Q N L");
@@ -189,9 +189,9 @@ int main(int argc, char** argv) {
 
     tree->Draw("delta_T_us>>h_total", "slow_Q1 >= 0 && slow_Q1 < 50", "goff");
 
-    // Y軸の最大値を調整 (30us/5bin以降の最大値の 1.25倍)
+    // Y軸の最大値を調整 (10us/3bin以降の最大値の 1.25倍)
     Double_t total_max = 0.0;
-    for (int bin = 5; bin <= h_total->GetNbinsX(); ++bin) {
+    for (int bin = 3; bin <= h_total->GetNbinsX(); ++bin) {
         Double_t content = h_total->GetBinContent(bin);
         if (content > total_max) {
             total_max = content;
@@ -199,19 +199,21 @@ int main(int argc, char** argv) {
     }
     h_total->SetMaximum(total_max * 1.25);
 
-    TF1* f_total = new TF1("f_total", "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
-    Double_t bg_total = 0.0;
-    int bg_total_bins = 0;
-    for (int bin = 70; bin <= h_total->GetNbinsX(); ++bin) {
-        bg_total += h_total->GetBinContent(bin);
-        bg_total_bins++;
-    }
-    if (bg_total_bins > 0) bg_total /= bg_total_bins;
+    TF1* f_total = new TF1("f_total", "[0]*exp(-x/[1]) + [2]", 10.0, 780.0);
+    
+    // 800 ~ 900 us のバックグラウンド推定
+    TH1D* h_bg_total = new TH1D("h_bg_total", "", 10, 800, 900);
+    tree->Draw("delta_T_us>>h_bg_total", "slow_Q1 >= 0 && slow_Q1 < 50", "goff");
+    Double_t bg_total = h_bg_total->Integral() / 10.0;
+    delete h_bg_total;
+
+    Double_t bg_total_min = std::max(0.0, bg_total * 0.9);
+    Double_t bg_total_max = bg_total * 1.1 + 1.0;
 
     f_total->SetParameters(total_max - bg_total, 120.0, bg_total);
     f_total->SetParLimits(0, 0.0, total_max * 2.0);
     f_total->SetParLimits(1, 1.0, 700.0);
-    f_total->FixParameter(2, bg_total); // 背景を固定
+    f_total->SetParLimits(2, bg_total_min, bg_total_max); // 前後10%の微調整を許容
 
     // 2段階フィット
     h_total->Fit(f_total, "R Q N L");
