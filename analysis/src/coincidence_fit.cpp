@@ -63,9 +63,11 @@ int main(int argc, char** argv) {
     // PDF の書き込み開始 (オープン)
     c->Print((pdf_path + "[").c_str());
 
-    // Q1 ゲート設定: 5刻みで 0 から 100 まで回す
-    const Double_t q1_step = 5.0;
-    const Double_t q1_max_limit = 100.0;
+    // Q1 ゲート設定: 20までは5刻み、それ以降50までは10刻み
+    std::vector<std::pair<Double_t, Double_t>> gates = {
+        {0.0, 5.0}, {5.0, 10.0}, {10.0, 15.0}, {15.0, 20.0},
+        {20.0, 30.0}, {30.0, 40.0}, {40.0, 50.0}
+    };
     
     std::vector<Double_t> vec_q1;
     std::vector<Double_t> vec_q1_err;
@@ -76,8 +78,9 @@ int main(int argc, char** argv) {
     c->Divide(2, 2);
     int pad_idx = 1;
 
-    for (Double_t q_min = 0.0; q_min < q1_max_limit; q_min += q1_step) {
-        Double_t q_max = q_min + q1_step;
+    for (const auto& gate : gates) {
+        Double_t q_min = gate.first;
+        Double_t q_max = gate.second;
         std::string gate_cut = Form("slow_Q1 >= %f && slow_Q1 < %f", q_min, q_max);
         
         // 統計チェック
@@ -97,13 +100,25 @@ int main(int argc, char** argv) {
 
         tree->Draw(Form("delta_T_us>>%s", hist_name.c_str()), gate_cut.c_str(), "goff");
 
+        // -----------------------------------------------------------------
+        // Y軸の最大値を調整: 0 ~ 10 us 付近の巨大ノイズを除外した10us以降の最大値の 1.2 倍に設定
+        // (1bin = 5us なので、10us は 3bin目以降。3bin目から100bin目までの最大値を探す)
+        // -----------------------------------------------------------------
+        Double_t local_max = 0.0;
+        for (int bin = 3; bin <= h->GetNbinsX(); ++bin) {
+            Double_t content = h->GetBinContent(bin);
+            if (content > local_max) {
+                local_max = content;
+            }
+        }
+        h->SetMaximum(local_max * 1.25);
+
         // フィット関数: [0]*exp(-x/[1]) + [2] (指数関数 + 定数項)
-        // フィット範囲: 20 ~ 450 us (即発ノイズを避けるため 20 us から開始し、500us近辺の端を避けるため 450 us まで)
-        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 20.0, 450.0);
+        // フィット範囲: 10 ~ 500 us
+        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 500.0);
         
-        Double_t max_val = h->GetMaximum();
         Double_t bg_est = h->GetBinContent(95); // 475 us 付近の値をバックグラウンド初期値とする
-        f_exp->SetParameters(max_val - bg_est, 30.0, bg_est);
+        f_exp->SetParameters(local_max - bg_est, 30.0, bg_est);
         f_exp->SetParLimits(1, 1.0, 300.0);
 
         h->Fit(f_exp, "R Q");
@@ -125,8 +140,8 @@ int main(int argc, char** argv) {
 
         // グラフ用データに追加 (フィット結果が妥当な場合のみ)
         if (tau > 2.0 && tau < 300.0 && tau_err < tau * 0.5) {
-            vec_q1.push_back(q_min + q1_step / 2.0);
-            vec_q1_err.push_back(q1_step / 2.0);
+            vec_q1.push_back(q_min + (q_max - q_min) / 2.0);
+            vec_q1_err.push_back((q_max - q_min) / 2.0);
             vec_tau.push_back(tau);
             vec_tau_err.push_back(tau_err);
         }
@@ -134,7 +149,7 @@ int main(int argc, char** argv) {
         pad_idx++;
         if (pad_idx > 4) {
             c->Print(pdf_path.c_str());
-            c->Clear(); // c->Clear("D") ではなく Clear() で安全に全消去
+            c->Clear();
             c->Divide(2, 2);
             pad_idx = 1;
         }
@@ -164,8 +179,10 @@ int main(int argc, char** argv) {
         gr->SetLineColor(kBlue);
         gr->SetLineWidth(2);
         
-        gr->GetYaxis()->SetRangeUser(0.0, 150.0);
-        gr->GetXaxis()->SetRangeUser(0.0, q1_max_limit);
+        // 縦軸レンジの自動最適化 (得られた最大のtauに応じてマージンを調整、最低でも 50.0 us は確保)
+        Double_t max_tau = *std::max_element(vec_tau.begin(), vec_tau.end());
+        gr->GetYaxis()->SetRangeUser(0.0, std::max(50.0, max_tau * 1.25));
+        gr->GetXaxis()->SetRangeUser(0.0, 50.0); // Q1の上限は50まで
         
         gr->Draw("AP");
         c->Print(pdf_path.c_str());
