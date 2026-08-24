@@ -1,0 +1,13 @@
+# Build artifacts
+.build/
+bin/
+obj/
+
+# Large data files
+data/*.dat
+data/*.root
+
+# Results
+pdf/
+results/
+*.png
