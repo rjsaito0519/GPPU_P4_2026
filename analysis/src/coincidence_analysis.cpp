@@ -5,6 +5,11 @@
 #include <TTree.h>
 #include <TTreeReader.h>
 #include <TTreeReaderValue.h>
+#include <TCanvas.h>
+#include <TH1D.h>
+#include <TLine.h>
+#include <TStyle.h>
+#include <TSystem.h>
 #include "progress_bar.h"
 
 // メモリ上にロードするためのイベントデータ構造体
@@ -70,7 +75,62 @@ int main(int argc, char** argv) {
     }
     std::cout << "\nLoaded " << events.size() << " entries successfully." << std::endl;
 
-    // 出力ファイルの準備
+    // -------------------------------------------------------------
+    // 全イベントに対する T1 - T0 のトリガー選別窓プロット (統計十分な全体分布)
+    // -------------------------------------------------------------
+    std::string pdf_dir = "pdf";
+    gSystem->mkdir(pdf_dir.c_str(), true);
+    size_t last_slash = input_path.find_last_of("/\\");
+    std::string base_name = (last_slash == std::string::npos) ? input_path : input_path.substr(last_slash + 1);
+    size_t last_dot_base = base_name.find_last_of(".");
+    if (last_dot_base != std::string::npos) {
+        base_name = base_name.substr(0, last_dot_base);
+    }
+    std::string trigger_pdf_path = pdf_dir + "/" + base_name + "_coincidence_trigger.pdf";
+
+    std::cout << "Generating trigger window plot (All events)..." << std::endl;
+    TCanvas* c_trig = new TCanvas("c_trig", "Trigger Window", 800, 600);
+    gStyle->SetOptStat(0);
+    c_trig->SetLeftMargin(0.15);
+    c_trig->SetBottomMargin(0.15);
+    
+    // T1 - T0 の全分布 (横軸 20 ~ 180 ns, 160bins)
+    TH1D* h_trig = new TH1D("h_trig", "Coincidence Trigger Window (All events);T1 - T0 [ns];Entries", 160, 20, 180);
+    h_trig->SetLineColor(kBlack);
+    h_trig->SetLineWidth(2);
+    
+    for (const auto& ev : events) {
+        if (ev.T1 > 0.0 && ev.T0 > 0.0) {
+            h_trig->Fill(ev.T1 - ev.T0);
+        }
+    }
+    h_trig->Draw("hist");
+
+    // 60 ns と 120 ns のゲート境界を示す赤い縦点線
+    Double_t max_y = h_trig->GetMaximum() * 1.05;
+    TLine* line_low = new TLine(60.0, 0, 60.0, max_y);
+    line_low->SetLineColor(kRed);
+    line_low->SetLineStyle(2);
+    line_low->SetLineWidth(2);
+    line_low->Draw("same");
+
+    TLine* line_high = new TLine(120.0, 0, 120.0, max_y);
+    line_high->SetLineColor(kRed);
+    line_high->SetLineStyle(2);
+    line_high->SetLineWidth(2);
+    line_high->Draw("same");
+
+    c_trig->Print(trigger_pdf_path.c_str());
+    std::cout << "Saved trigger window plot to: " << trigger_pdf_path << std::endl;
+    
+    delete line_low;
+    delete line_high;
+    delete h_trig;
+    delete c_trig;
+
+    // -------------------------------------------------------------
+    // 出力ファイルの準備 & 同時ペア解析
+    // -------------------------------------------------------------
     TFile* fout = new TFile(output_path.c_str(), "RECREATE");
     TTree* out_tree = new TTree("coincidence_tree", "Coincidence Analysis Results");
 
@@ -111,7 +171,6 @@ int main(int argc, char** argv) {
         }
 
         const auto& fast = events[i];
-        // 未補正の T0 を用いて TOF を判定する
         Double_t t_diff = fast.T1 - fast.T0;
 
         // 起点(fast)の条件チェック: T1-T0 が 60 ~ 120 ns の間

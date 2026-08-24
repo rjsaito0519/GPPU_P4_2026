@@ -59,30 +59,11 @@ int main(int argc, char** argv) {
 
     // 2x2 分割キャンバス (1200 x 900)
     TCanvas* c = new TCanvas("c", "Coincidence Fit", 1200, 900);
+    
+    // PDF の書き込み開始 (オープン)
     c->Print((pdf_path + "[").c_str());
 
-    // -------------------------------------------------------------
-    // 1ページ目: 先発事象 (fast) の Time Window (fast_T1 - fast_T0) を表示
-    // -------------------------------------------------------------
-    std::cout << "Plotting Trigger Time Window..." << std::endl;
-    c->Clear();
-    c->SetRightMargin(0.10); // 余白を通常サイズに設定
-    
-    TH1D* h_window = new TH1D("h_window", "Trigger Time Window (fast_T1 - fast_T0);fast_T1 - fast_T0 [ns];Entries", 100, 50, 130);
-    h_window->SetLineColor(kBlue);
-    h_window->SetLineWidth(2);
-    h_window->SetFillColor(kBlue);
-    h_window->SetFillStyle(3002);
-    
-    tree->Draw("fast_T1 - fast_T0>>h_window", "", "hist");
-    h_window->Draw("hist");
-    
-    c->Print(pdf_path.c_str());
-    delete h_window;
-
-    // -------------------------------------------------------------
-    // 2ページ目以降: Q1 5刻みごとの時間差分布フィット
-    // -------------------------------------------------------------
+    // Q1 ゲート設定: 5刻みで 0 から 100 まで回す
     const Double_t q1_step = 5.0;
     const Double_t q1_max_limit = 100.0;
     
@@ -101,7 +82,7 @@ int main(int argc, char** argv) {
         
         // 統計チェック
         Long64_t entries = tree->GetEntries(gate_cut.c_str());
-        if (entries < 30) { // 統計下限を30に緩和
+        if (entries < 30) {
             std::cout << "Q1 in [" << q_min << ", " << q_max << "]: skipped due to low statistics (" << entries << " entries)" << std::endl;
             continue;
         }
@@ -153,13 +134,14 @@ int main(int argc, char** argv) {
         pad_idx++;
         if (pad_idx > 4) {
             c->Print(pdf_path.c_str());
-            c->Clear("D");
+            c->Clear(); // c->Clear("D") ではなく Clear() で安全に全消去
             c->Divide(2, 2);
             pad_idx = 1;
         }
     }
 
     if (pad_idx > 1) {
+        // 未使用のパッドをクリア
         for (int p = pad_idx; p <= 4; ++p) {
             c->cd(p)->Clear();
         }
