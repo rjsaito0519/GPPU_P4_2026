@@ -92,9 +92,9 @@ int main(int argc, char** argv) {
 
         c->cd(pad_idx);
         
-        // 0 ~ 800 us の範囲で 114 ビン (1bin = 7.02 us)
+        // 0 ~ 800 us の範囲で 100 ビン (1bin = 8.0 us)
         std::string hist_name = Form("h_q1_%d_%d", (int)q_min, (int)q_max);
-        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 114, 0, 800);
+        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 100, 0, 800);
         h->SetLineColor(kBlack);
         h->SetLineWidth(2);
 
@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
 
         // -----------------------------------------------------------------
         // Y軸の最大値を調整: 0 ~ 30 us 付近の巨大ノイズを除外した30us以降の最大値の 1.25 倍に設定
-        // (1bin = 7.02us なので、30us は 4.2bin目付近。安全のため5bin目(28us~)以降の最大値を探す)
+        // (1bin = 8.0us なので、30us は 3.75bin目付近。安全のため5bin目(32us~)以降の最大値を探す)
         // -----------------------------------------------------------------
         Double_t local_max = 0.0;
         for (int bin = 5; bin <= h->GetNbinsX(); ++bin) {
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
         // フィット範囲: 30 ~ 780 us
         TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
         
-        // 500 ~ 800 us (70bin から 114bin) の平均値をバックグラウンド初期値とする
+        // 500 ~ 800 us (70bin から 100bin) の平均値をバックグラウンド初期値とする
         Double_t bg_est = 0.0;
         int bg_bins = 0;
         for (int bin = 70; bin <= h->GetNbinsX(); ++bin) {
@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
     c->Clear();
     c->SetRightMargin(0.10); // 余白をデフォルトに戻す
 
-    TH1D* h_total = new TH1D("h_total", "Total Coincidence Decay Fit (slow_Q1: 0 to 50);#Delta t [#mus];Entries", 114, 0, 800);
+    TH1D* h_total = new TH1D("h_total", "Total Coincidence Decay Fit (slow_Q1: 0 to 50);#Delta t [#mus];Entries", 100, 0, 800);
     h_total->SetLineColor(kBlack);
     h_total->SetLineWidth(2);
 
