@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <cmath>
 #include <TFile.h>
 #include <TTree.h>
 #include <TTreeReader.h>
@@ -20,15 +21,23 @@ struct EventData {
 };
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <input_root_path> [output_root_path]" << std::endl;
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <input_root_path> <p0_slew> [output_root_path]" << std::endl;
         return 1;
     }
 
     std::string input_path = argv[1];
+    Double_t p0_slew = 0.0;
+    try {
+        p0_slew = std::stod(argv[2]);
+    } catch (const std::exception& e) {
+        std::cerr << "Error: Invalid slewing parameter p0_slew: " << argv[2] << std::endl;
+        return 1;
+    }
+
     std::string output_path;
-    if (argc > 2) {
-        output_path = argv[2];
+    if (argc > 3) {
+        output_path = argv[3];
     } else {
         size_t last_dot = input_path.find_last_of(".");
         if (last_dot != std::string::npos) {
@@ -44,7 +53,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // TTreeReader でデータをメモリ上にロードする
+    // TTreeReader でデータをロードする
     TTreeReader reader("tree", fin);
     TTreeReaderValue<Int_t> event(reader, "event");
     TTreeReaderValue<Long64_t> TS(reader, "TS");
@@ -52,11 +61,10 @@ int main(int argc, char** argv) {
     TTreeReaderValue<Double_t> Q0(reader, "Q0");
     TTreeReaderValue<Double_t> T1(reader, "T1");
     TTreeReaderValue<Double_t> Q1(reader, "Q1");
-    TTreeReaderValue<Double_t> T0_corr(reader, "T0_corr");
     TTreeReaderValue<Int_t> data_id(reader, "data_id");
 
     Long64_t nentries = reader.GetEntries(true);
-    std::cout << "Loading " << nentries << " entries into memory..." << std::endl;
+    std::cout << "Loading " << nentries << " entries into memory (Applying p0 = " << p0_slew << ")..." << std::endl;
 
     std::vector<EventData> events;
     events.reserve(nentries);
@@ -66,7 +74,14 @@ int main(int argc, char** argv) {
         if (load_count % 50000 == 0 || load_count == nentries - 1) {
             displayProgressBar(load_count + 1, nentries);
         }
-        events.push_back({*event, *TS, *T0, *Q0, *T1, *Q1, *T0_corr, *data_id});
+
+        // スルーイング補正をその場で計算 (Q0 > 0 の場合のみ適用、かつゼロ除算ガード)
+        Double_t t0_corr_val = *T0;
+        if (*Q0 > 0.0) {
+            t0_corr_val = *T0 - (p0_slew / std::sqrt(*Q0));
+        }
+
+        events.push_back({*event, *TS, *T0, *Q0, *T1, *Q1, t0_corr_val, *data_id});
         load_count++;
     }
     std::cout << "\nLoaded " << events.size() << " entries successfully." << std::endl;
