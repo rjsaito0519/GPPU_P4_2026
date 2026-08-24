@@ -117,8 +117,17 @@ int main(int argc, char** argv) {
         // フィット範囲: 30 ~ 780 us
         TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
         
-        Double_t bg_est = h->GetBinContent(108); // 756 us 付近の値をバックグラウンド初期値とする
-        f_exp->SetParameters(local_max - bg_est, 30.0, bg_est);
+        // 500 ~ 800 us (70bin から 114bin) の平均値をバックグラウンド初期値とする
+        Double_t bg_est = 0.0;
+        int bg_bins = 0;
+        for (int bin = 70; bin <= h->GetNbinsX(); ++bin) {
+            bg_est += h->GetBinContent(bin);
+            bg_bins++;
+        }
+        if (bg_bins > 0) bg_est /= bg_bins;
+
+        // 時定数 tau の初期値は、実際のスケールに合わせた 120.0 us を設定
+        f_exp->SetParameters(local_max - bg_est, 120.0, bg_est);
         f_exp->SetParLimits(1, 1.0, 700.0); // 探索リミッターの上限を 700 us に設定
 
         // "E" オプションは一部の統計不足ゲートで警告を出す原因になるため、標準の HESSE フィットを実行
