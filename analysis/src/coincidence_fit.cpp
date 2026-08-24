@@ -57,11 +57,32 @@ int main(int argc, char** argv) {
     }
     std::string pdf_path = output_dir + "/" + base_name + "_fit_results.pdf";
 
-    // 2x2 分割のキャンバスを作成 (1200 x 900)
+    // 2x2 分割キャンバス (1200 x 900)
     TCanvas* c = new TCanvas("c", "Coincidence Fit", 1200, 900);
     c->Print((pdf_path + "[").c_str());
 
-    // Q1 ゲート設定: 5刻みで 0 から 100 まで回す
+    // -------------------------------------------------------------
+    // 1ページ目: 先発事象 (fast) の Time Window (fast_T1 - fast_T0) を表示
+    // -------------------------------------------------------------
+    std::cout << "Plotting Trigger Time Window..." << std::endl;
+    c->Clear();
+    c->SetRightMargin(0.10); // 余白を通常サイズに設定
+    
+    TH1D* h_window = new TH1D("h_window", "Trigger Time Window (fast_T1 - fast_T0);fast_T1 - fast_T0 [ns];Entries", 100, 50, 130);
+    h_window->SetLineColor(kBlue);
+    h_window->SetLineWidth(2);
+    h_window->SetFillColor(kBlue);
+    h_window->SetFillStyle(3002);
+    
+    tree->Draw("fast_T1 - fast_T0>>h_window", "", "hist");
+    h_window->Draw("hist");
+    
+    c->Print(pdf_path.c_str());
+    delete h_window;
+
+    // -------------------------------------------------------------
+    // 2ページ目以降: Q1 5刻みごとの時間差分布フィット
+    // -------------------------------------------------------------
     const Double_t q1_step = 5.0;
     const Double_t q1_max_limit = 100.0;
     
@@ -70,6 +91,7 @@ int main(int argc, char** argv) {
     std::vector<Double_t> vec_tau;
     std::vector<Double_t> vec_tau_err;
 
+    c->Clear();
     c->Divide(2, 2);
     int pad_idx = 1;
 
@@ -77,35 +99,32 @@ int main(int argc, char** argv) {
         Double_t q_max = q_min + q1_step;
         std::string gate_cut = Form("slow_Q1 >= %f && slow_Q1 < %f", q_min, q_max);
         
-        // ゲート内にデータが存在するか確認するためにエントリー数をチェック
+        // 統計チェック
         Long64_t entries = tree->GetEntries(gate_cut.c_str());
-        if (entries < 50) {
-            // エントリー数が少なすぎるゲートはフィットが不安定になるためスキップ
+        if (entries < 30) { // 統計下限を30に緩和
             std::cout << "Q1 in [" << q_min << ", " << q_max << "]: skipped due to low statistics (" << entries << " entries)" << std::endl;
             continue;
         }
 
         c->cd(pad_idx);
         
-        // 0 ~ 200 us の範囲で 100 ビン (1bin = 2 us)
+        // 0 ~ 500 us の範囲で 100 ビン (1bin = 5 us)
         std::string hist_name = Form("h_q1_%d_%d", (int)q_min, (int)q_max);
-        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 100, 0, 200);
+        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 100, 0, 500);
         h->SetLineColor(kBlack);
         h->SetLineWidth(2);
 
         tree->Draw(Form("delta_T_us>>%s", hist_name.c_str()), gate_cut.c_str(), "goff");
 
         // フィット関数: [0]*exp(-x/[1]) + [2] (指数関数 + 定数項)
-        // フィット範囲: 10 ~ 150 us (即発ピークのある 0~10 us を避けてフィット)
-        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 150.0);
+        // フィット範囲: 20 ~ 450 us (即発ノイズを避けるため 20 us から開始し、500us近辺の端を避けるため 450 us まで)
+        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 20.0, 450.0);
         
-        // 初期パラメータ推定
         Double_t max_val = h->GetMaximum();
-        Double_t bg_est = h->GetBinContent(95); // 190 us 付近の値をバックグラウンド初期値とする
+        Double_t bg_est = h->GetBinContent(95); // 475 us 付近の値をバックグラウンド初期値とする
         f_exp->SetParameters(max_val - bg_est, 30.0, bg_est);
-        f_exp->SetParLimits(1, 1.0, 200.0); // 時定数の探索範囲を 1 ~ 200 us に制限
+        f_exp->SetParLimits(1, 1.0, 300.0);
 
-        // フィットの実行
         h->Fit(f_exp, "R Q");
 
         Double_t tau = f_exp->GetParameter(1);
@@ -116,7 +135,6 @@ int main(int argc, char** argv) {
         f_exp->SetLineWidth(3);
         f_exp->Draw("same");
 
-        // フィット結果のパラメータを画面に表示
         TLatex latex;
         latex.SetNDC();
         latex.SetTextSize(0.045);
@@ -124,8 +142,8 @@ int main(int argc, char** argv) {
         latex.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mus", tau, tau_err));
         latex.DrawLatex(0.45, 0.68, Form("BG = %.1f #pm %.1f", f_exp->GetParameter(2), f_exp->GetParError(2)));
 
-        // グラフ用データに追加 (時定数が極端に大きく狂ったものやエラーが大きいものは除外)
-        if (tau > 2.0 && tau < 150.0 && tau_err < tau * 0.5) {
+        // グラフ用データに追加 (フィット結果が妥当な場合のみ)
+        if (tau > 2.0 && tau < 300.0 && tau_err < tau * 0.5) {
             vec_q1.push_back(q_min + q1_step / 2.0);
             vec_q1_err.push_back(q1_step / 2.0);
             vec_tau.push_back(tau);
@@ -134,17 +152,14 @@ int main(int argc, char** argv) {
 
         pad_idx++;
         if (pad_idx > 4) {
-            // 4つのプロットが埋まったらPDFに出力し、キャンバスをクリア
             c->Print(pdf_path.c_str());
-            c->Clear("D"); // Divide状態を維持したまま各パッドをクリア
+            c->Clear("D");
             c->Divide(2, 2);
             pad_idx = 1;
         }
     }
 
-    // 残りのプロットがある場合はPDFへ出力
     if (pad_idx > 1) {
-        // 空いているパッドを非表示にする
         for (int p = pad_idx; p <= 4; ++p) {
             c->cd(p)->Clear();
         }
@@ -156,7 +171,7 @@ int main(int argc, char** argv) {
     // -------------------------------------------------------------
     std::cout << "Plotting summary graph..." << std::endl;
     c->Clear();
-    c->SetRightMargin(0.10); // 余白をデフォルトに戻す
+    c->SetRightMargin(0.10);
 
     if (!vec_q1.empty()) {
         TGraphErrors* gr = new TGraphErrors(vec_q1.size(), &vec_q1[0], &vec_tau[0], &vec_q1_err[0], &vec_tau_err[0]);
@@ -167,8 +182,7 @@ int main(int argc, char** argv) {
         gr->SetLineColor(kBlue);
         gr->SetLineWidth(2);
         
-        // 描画範囲を適切に調整
-        gr->GetYaxis()->SetRangeUser(0.0, 100.0);
+        gr->GetYaxis()->SetRangeUser(0.0, 150.0);
         gr->GetXaxis()->SetRangeUser(0.0, q1_max_limit);
         
         gr->Draw("AP");
