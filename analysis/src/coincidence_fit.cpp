@@ -127,7 +127,8 @@ int main(int argc, char** argv) {
         Double_t bg_max = bg_est * 1.1 + 1.0;
 
         // 時定数 tau の初期値は、実際のスケールに合わせた 120.0 us を設定
-        f_exp->SetParameters(local_max - bg_est, 120.0, bg_est);
+        Double_t amp_init = std::max(1.0, local_max - bg_est);
+        f_exp->SetParameters(amp_init, 120.0, bg_est);
         f_exp->SetParLimits(0, 0.0, local_max * 2.0); // 振幅に安全制限を設定
         f_exp->SetParLimits(1, 1.0, 700.0);           // 時定数の上限を 700 us に設定
         f_exp->SetParLimits(2, bg_min, bg_max);       // 背景は推定BG値の前後10%の微調整のみを許容
@@ -210,7 +211,8 @@ int main(int argc, char** argv) {
     Double_t bg_total_min = std::max(0.0, bg_total * 0.9);
     Double_t bg_total_max = bg_total * 1.1 + 1.0;
 
-    f_total->SetParameters(total_max - bg_total, 120.0, bg_total);
+    Double_t total_amp_init = std::max(1.0, total_max - bg_total);
+    f_total->SetParameters(total_amp_init, 120.0, bg_total);
     f_total->SetParLimits(0, 0.0, total_max * 2.0);
     f_total->SetParLimits(1, 1.0, 700.0);
     f_total->SetParLimits(2, bg_total_min, bg_total_max); // 前後10%の微調整を許容
