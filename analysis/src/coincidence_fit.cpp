@@ -101,11 +101,11 @@ int main(int argc, char** argv) {
         tree->Draw(Form("delta_T_us>>%s", hist_name.c_str()), gate_cut.c_str(), "goff");
 
         // -----------------------------------------------------------------
-        // Y軸の最大値を調整: 0 ~ 10 us 付近の巨大ノイズを除外した10us以降の最大値の 1.25 倍に設定
-        // (1bin = 7us なので、10us は 2bin目付近。安全のため3bin目(14us)以降の最大値を探す)
+        // Y軸の最大値を調整: 0 ~ 30 us 付近の巨大ノイズを除外した30us以降の最大値の 1.25 倍に設定
+        // (1bin = 7.02us なので、30us は 4.2bin目付近。安全のため5bin目(28us~)以降の最大値を探す)
         // -----------------------------------------------------------------
         Double_t local_max = 0.0;
-        for (int bin = 3; bin <= h->GetNbinsX(); ++bin) {
+        for (int bin = 5; bin <= h->GetNbinsX(); ++bin) {
             Double_t content = h->GetBinContent(bin);
             if (content > local_max) {
                 local_max = content;
@@ -114,8 +114,8 @@ int main(int argc, char** argv) {
         h->SetMaximum(local_max * 1.25);
 
         // フィット関数: [0]*exp(-x/[1]) + [2] (指数関数 + 定数項)
-        // フィット範囲: 10 ~ 780 us
-        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 10.0, 780.0);
+        // フィット範囲: 30 ~ 780 us
+        TF1* f_exp = new TF1(Form("f_exp_%s", hist_name.c_str()), "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
         
         Double_t bg_est = h->GetBinContent(108); // 756 us 付近の値をバックグラウンド初期値とする
         f_exp->SetParameters(local_max - bg_est, 30.0, bg_est);
