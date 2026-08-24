@@ -1,7 +1,6 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <cmath>
 #include <TFile.h>
 #include <TTree.h>
 #include <TTreeReader.h>
@@ -16,28 +15,19 @@ struct EventData {
     Double_t Q0;
     Double_t T1;
     Double_t Q1;
-    Double_t T0_corr;
     Int_t data_id;
 };
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <input_root_path> <p0_slew> [output_root_path]" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <input_root_path> [output_root_path]" << std::endl;
         return 1;
     }
 
     std::string input_path = argv[1];
-    Double_t p0_slew = 0.0;
-    try {
-        p0_slew = std::stod(argv[2]);
-    } catch (const std::exception& e) {
-        std::cerr << "Error: Invalid slewing parameter p0_slew: " << argv[2] << std::endl;
-        return 1;
-    }
-
     std::string output_path;
-    if (argc > 3) {
-        output_path = argv[3];
+    if (argc > 2) {
+        output_path = argv[2];
     } else {
         size_t last_dot = input_path.find_last_of(".");
         if (last_dot != std::string::npos) {
@@ -64,7 +54,7 @@ int main(int argc, char** argv) {
     TTreeReaderValue<Int_t> data_id(reader, "data_id");
 
     Long64_t nentries = reader.GetEntries(true);
-    std::cout << "Loading " << nentries << " entries into memory (Applying p0 = " << p0_slew << ")..." << std::endl;
+    std::cout << "Loading " << nentries << " entries into memory..." << std::endl;
 
     std::vector<EventData> events;
     events.reserve(nentries);
@@ -75,13 +65,7 @@ int main(int argc, char** argv) {
             displayProgressBar(load_count + 1, nentries);
         }
 
-        // スルーイング補正をその場で計算 (Q0 > 0 の場合のみ適用、かつゼロ除算ガード)
-        Double_t t0_corr_val = *T0;
-        if (*Q0 > 0.0) {
-            t0_corr_val = *T0 - (p0_slew / std::sqrt(*Q0));
-        }
-
-        events.push_back({*event, *TS, *T0, *Q0, *T1, *Q1, t0_corr_val, *data_id});
+        events.push_back({*event, *TS, *T0, *Q0, *T1, *Q1, *data_id});
         load_count++;
     }
     std::cout << "\nLoaded " << events.size() << " entries successfully." << std::endl;
@@ -100,8 +84,8 @@ int main(int argc, char** argv) {
     Double_t out_slow_T1;
     Double_t out_fast_Q1;
     Double_t out_slow_Q1;
-    Double_t out_fast_T0_corr;
-    Double_t out_slow_T0_corr;
+    Double_t out_fast_T0;
+    Double_t out_slow_T0;
     Int_t out_data_id;
 
     out_tree->Branch("fast_event", &out_fast_event, "fast_event/I");
@@ -114,11 +98,11 @@ int main(int argc, char** argv) {
     out_tree->Branch("slow_T1", &out_slow_T1, "slow_T1/D");
     out_tree->Branch("fast_Q1", &out_fast_Q1, "fast_Q1/D");
     out_tree->Branch("slow_Q1", &out_slow_Q1, "slow_Q1/D");
-    out_tree->Branch("fast_T0_corr", &out_fast_T0_corr, "fast_T0_corr/D");
-    out_tree->Branch("slow_T0_corr", &out_slow_T0_corr, "slow_T0_corr/D");
+    out_tree->Branch("fast_T0", &out_fast_T0, "fast_T0/D");
+    out_tree->Branch("slow_T0", &out_slow_T0, "slow_T0/D");
     out_tree->Branch("data_id", &out_data_id, "data_id/I");
 
-    std::cout << "Analyzing coincidence events (using T0_corr for timing)..." << std::endl;
+    std::cout << "Analyzing coincidence events (using raw T0 for timing)..." << std::endl;
     Long64_t total_events = events.size();
 
     for (Long64_t i = 0; i < total_events; ++i) {
@@ -127,10 +111,10 @@ int main(int argc, char** argv) {
         }
 
         const auto& fast = events[i];
-        // 補正された T0_corr を用いて TOF を判定する
-        Double_t t_diff = fast.T1 - fast.T0_corr;
+        // 未補正の T0 を用いて TOF を判定する
+        Double_t t_diff = fast.T1 - fast.T0;
 
-        // 起点(fast)の条件チェック: T1-T0_corr が 60 ~ 120 ns の間
+        // 起点(fast)の条件チェック: T1-T0 が 60 ~ 120 ns の間
         if (t_diff >= 60.0 && t_diff <= 120.0) {
             // 後続イベントを1 ms (125000 TS) 以内でスキャン
             for (Long64_t j = i + 1; j < total_events; ++j) {
@@ -160,8 +144,8 @@ int main(int argc, char** argv) {
                     out_slow_T1 = slow.T1;
                     out_fast_Q1 = fast.Q1;
                     out_slow_Q1 = slow.Q1;
-                    out_fast_T0_corr = fast.T0_corr;
-                    out_slow_T0_corr = slow.T0_corr;
+                    out_fast_T0 = fast.T0;
+                    out_slow_T0 = slow.T0;
                     out_data_id = fast.data_id;
 
                     out_tree->Fill();
