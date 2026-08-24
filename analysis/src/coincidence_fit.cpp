@@ -130,7 +130,8 @@ int main(int argc, char** argv) {
         f_exp->SetParameters(local_max - bg_est, 120.0, bg_est);
         f_exp->SetParLimits(1, 1.0, 700.0); // 探索リミッターの上限を 700 us に設定
 
-        // "E" オプションは一部の統計不足ゲートで警告を出す原因になるため、標準の HESSE フィットを実行
+        // 2段階フィット (1回目のフィット結果を初期値として引き継いで2回目の本フィットを行う)
+        h->Fit(f_exp, "R Q N");
         h->Fit(f_exp, "R Q");
 
         Double_t tau = f_exp->GetParameter(1);
@@ -174,11 +175,63 @@ int main(int argc, char** argv) {
     }
 
     // -------------------------------------------------------------
+    // 合算フィット (Total Coincidence Fit) [X+1ページ目]
+    // -------------------------------------------------------------
+    std::cout << "Plotting Total (all Q1) Coincidence Fit..." << std::endl;
+    c->Clear();
+    c->SetRightMargin(0.10); // 余白をデフォルトに戻す
+
+    TH1D* h_total = new TH1D("h_total", "Total Coincidence Decay Fit (slow_Q1: 0 to 50);#Delta t [#mus];Entries", 114, 0, 800);
+    h_total->SetLineColor(kBlack);
+    h_total->SetLineWidth(2);
+
+    tree->Draw("delta_T_us>>h_total", "slow_Q1 >= 0 && slow_Q1 < 50", "goff");
+
+    // Y軸の最大値を調整 (30us/5bin以降の最大値の 1.25倍)
+    Double_t total_max = 0.0;
+    for (int bin = 5; bin <= h_total->GetNbinsX(); ++bin) {
+        Double_t content = h_total->GetBinContent(bin);
+        if (content > total_max) {
+            total_max = content;
+        }
+    }
+    h_total->SetMaximum(total_max * 1.25);
+
+    TF1* f_total = new TF1("f_total", "[0]*exp(-x/[1]) + [2]", 30.0, 780.0);
+    Double_t bg_total = 0.0;
+    int bg_total_bins = 0;
+    for (int bin = 70; bin <= h_total->GetNbinsX(); ++bin) {
+        bg_total += h_total->GetBinContent(bin);
+        bg_total_bins++;
+    }
+    if (bg_total_bins > 0) bg_total /= bg_total_bins;
+
+    f_total->SetParameters(total_max - bg_total, 120.0, bg_total);
+    f_total->SetParLimits(1, 1.0, 700.0);
+
+    // 2段階フィット
+    h_total->Fit(f_total, "R Q N");
+    h_total->Fit(f_total, "R Q");
+
+    h_total->Draw("hist");
+    f_total->SetLineColor(kRed);
+    f_total->SetLineWidth(3);
+    f_total->Draw("same");
+
+    TLatex latex_total;
+    latex_total.SetNDC();
+    latex_total.SetTextSize(0.045);
+    latex_total.SetTextColor(kRed+2);
+    latex_total.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mus", f_total->GetParameter(1), f_total->GetParError(1)));
+    latex_total.DrawLatex(0.45, 0.68, Form("BG = %.1f #pm %.1f", f_total->GetParameter(2), f_total->GetParError(2)));
+
+    c->Print(pdf_path.c_str());
+
+    // -------------------------------------------------------------
     // 最終ページ: 時定数 tau の Q1 依存性グラフを描画
     // -------------------------------------------------------------
     std::cout << "Plotting summary graph..." << std::endl;
     c->Clear();
-    c->SetRightMargin(0.10);
 
     if (!vec_q1.empty()) {
         TGraphErrors* gr = new TGraphErrors(vec_q1.size(), &vec_q1[0], &vec_tau[0], &vec_q1_err[0], &vec_tau_err[0]);
@@ -186,6 +239,24 @@ int main(int argc, char** argv) {
         gr->SetMarkerStyle(20);
         gr->SetMarkerSize(1.5);
         gr->SetMarkerColor(kBlue);
+        gr->SetLineColor(kBlue);
+        gr->SetLineWidth(2);
+        
+        // 縦軸レンジの自動最適化 (得られた最大のtauに応じてマージンを調整、最低でも 50.0 us は確保)
+        Double_t max_tau = *std::max_element(vec_tau.begin(), vec_tau.end());
+        gr->GetYaxis()->SetRangeUser(0.0, std::max(50.0, max_tau * 1.25));
+        gr->GetXaxis()->SetRangeUser(0.0, 50.0); // Q1の上限は50まで
+        
+        gr->Draw("AP");
+        c->Print(pdf_path.c_str());
+        
+        delete gr;
+    } else {
+        std::cerr << "Warning: No valid fit points to plot on summary graph." << std::endl;
+    }
+
+    // PDF 終了
+    c->Print((pdf_path + "]").c_str());>SetMarkerColor(kBlue);
         gr->SetLineColor(kBlue);
         gr->SetLineWidth(2);
         
