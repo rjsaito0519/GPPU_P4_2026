@@ -120,18 +120,18 @@ int main(int argc, char** argv) {
         std::string bg_hist_name = Form("h_bg_%s", hist_name.c_str());
         TH1D* h_bg = new TH1D(bg_hist_name.c_str(), "", 10, 800, 900);
         tree->Draw(Form("delta_T_us>>%s", bg_hist_name.c_str()), gate_cut.c_str(), "goff");
-        Double_t bg_est = h_bg->Integral() / 10.0;
+        // 1 usあたりの平均カウント = Integral() / 100.0 us
+        // h のビン幅 = 8.0 us
+        // よって、hの1ビンあたりのBG = (Integral() / 100.0) * 8.0 = Integral() * 0.08
+        Double_t bg_est = h_bg->Integral() * 0.08;
         delete h_bg;
-
-        Double_t bg_min = std::max(0.0, bg_est * 0.9);
-        Double_t bg_max = bg_est * 1.1 + 1.0;
 
         // 時定数 tau の初期値は、実際のスケールに合わせた 120.0 us を設定
         Double_t amp_init = std::max(1.0, local_max - bg_est);
         f_exp->SetParameters(amp_init, 120.0, bg_est);
         f_exp->SetParLimits(0, 0.0, local_max * 2.0); // 振幅に安全制限を設定
         f_exp->SetParLimits(1, 1.0, 700.0);           // 時定数の上限を 700 us に設定
-        f_exp->SetParLimits(2, bg_min, bg_max);       // 背景は推定BG値の前後10%の微調整のみを許容
+        f_exp->FixParameter(2, bg_est);               // 背景を固定してフィッティングを極限まで安定化
 
         // 2段階フィットに L オプション (ポアソン対数尤度フィット) を追加して誤差を安定化
         h->Fit(f_exp, "R Q N L");
@@ -205,17 +205,15 @@ int main(int argc, char** argv) {
     // 800 ~ 900 us のバックグラウンド推定
     TH1D* h_bg_total = new TH1D("h_bg_total", "", 10, 800, 900);
     tree->Draw("delta_T_us>>h_bg_total", "slow_Q1 >= 0 && slow_Q1 < 50", "goff");
-    Double_t bg_total = h_bg_total->Integral() / 10.0;
+    // h_total のビン幅 8.0 us に合わせるため、スケール係数 0.08 を掛ける
+    Double_t bg_total = h_bg_total->Integral() * 0.08;
     delete h_bg_total;
-
-    Double_t bg_total_min = std::max(0.0, bg_total * 0.9);
-    Double_t bg_total_max = bg_total * 1.1 + 1.0;
 
     Double_t total_amp_init = std::max(1.0, total_max - bg_total);
     f_total->SetParameters(total_amp_init, 120.0, bg_total);
     f_total->SetParLimits(0, 0.0, total_max * 2.0);
     f_total->SetParLimits(1, 1.0, 700.0);
-    f_total->SetParLimits(2, bg_total_min, bg_total_max); // 前後10%の微調整を許容
+    f_total->FixParameter(2, bg_total); // 背景を固定
 
     // 2段階フィット
     h_total->Fit(f_total, "R Q N L");
