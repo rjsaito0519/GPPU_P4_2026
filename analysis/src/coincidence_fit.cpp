@@ -128,11 +128,13 @@ int main(int argc, char** argv) {
 
         // 時定数 tau の初期値は、実際のスケールに合わせた 120.0 us を設定
         f_exp->SetParameters(local_max - bg_est, 120.0, bg_est);
-        f_exp->SetParLimits(1, 1.0, 700.0); // 探索リミッターの上限を 700 us に設定
+        f_exp->SetParLimits(0, 0.0, local_max * 2.0); // 振幅に安全制限を設定
+        f_exp->SetParLimits(1, 1.0, 700.0);           // 時定数の上限を 700 us に設定
+        f_exp->SetParLimits(2, 0.0, bg_est * 2.0 + 10.0); // 背景に安全制限を設定
 
-        // 2段階フィット (1回目のフィット結果を初期値として引き継いで2回目の本フィットを行う)
-        h->Fit(f_exp, "R Q N");
-        h->Fit(f_exp, "R Q");
+        // 2段階フィットに L オプション (ポアソン対数尤度フィット) を追加して誤差を安定化
+        h->Fit(f_exp, "R Q N L");
+        h->Fit(f_exp, "R Q L");
 
         Double_t tau = f_exp->GetParameter(1);
         Double_t tau_err = f_exp->GetParError(1);
@@ -207,11 +209,13 @@ int main(int argc, char** argv) {
     if (bg_total_bins > 0) bg_total /= bg_total_bins;
 
     f_total->SetParameters(total_max - bg_total, 120.0, bg_total);
+    f_total->SetParLimits(0, 0.0, total_max * 2.0);
     f_total->SetParLimits(1, 1.0, 700.0);
+    f_total->SetParLimits(2, 0.0, bg_total * 2.0 + 10.0);
 
     // 2段階フィット
-    h_total->Fit(f_total, "R Q N");
-    h_total->Fit(f_total, "R Q");
+    h_total->Fit(f_total, "R Q N L");
+    h_total->Fit(f_total, "R Q L");
 
     h_total->Draw("hist");
     f_total->SetLineColor(kRed);
