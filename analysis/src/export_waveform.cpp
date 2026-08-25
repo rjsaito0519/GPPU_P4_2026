@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <TFile.h>
 #include <TTree.h>
+#include <TSystem.h>
 
 using namespace std;
 
@@ -79,15 +80,22 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // 出力先ROOTファイル名の自動生成 (サフィックスを付与)
+    // 出力先ROOTファイル名の自動生成 (サフィックスを付与し、root/ フォルダ直下に配置)
     if (output_root_filename.empty()) {
-        output_root_filename = input_list_filename;
-        size_t last_dot = output_root_filename.find_last_of(".");
-        if (last_dot != string::npos) {
-            output_root_filename = output_root_filename.substr(0, last_dot);
+        string base_filename = input_list_filename;
+        size_t last_slash_in = base_filename.find_last_of("/\\");
+        if (last_slash_in != string::npos) {
+            base_filename = base_filename.substr(last_slash_in + 1);
         }
-        output_root_filename += suffix + ".root"; // 例: Cf252_wave_01_n.root などのサフィックス付き
+        size_t last_dot = base_filename.find_last_of(".");
+        if (last_dot != string::npos) {
+            base_filename = base_filename.substr(0, last_dot);
+        }
+        output_root_filename = "root/" + base_filename + suffix + ".root";
     }
+
+    // 出力先フォルダの作成
+    gSystem->mkdir("root", true);
 
     string list_dir = "";
     size_t last_slash = input_list_filename.find_last_of("/\\");
@@ -158,17 +166,21 @@ int main(int argc, char* argv[]) {
 
     if (!target_mode.empty()) {
         if (target_mode == "fastn" || target_mode == "slown") {
-            // coinファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01_coincidence.root)
+            // coinファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> root/Cf252_tq_01_coincidence.root)
             string coin_root_path = input_list_filename;
             size_t wave_pos = coin_root_path.find("wave");
             if (wave_pos != string::npos) {
                 coin_root_path.replace(wave_pos, 4, "tq");
             }
+            size_t last_slash_bin = coin_root_path.find_last_of("/\\");
+            if (last_slash_bin != string::npos) {
+                coin_root_path = coin_root_path.substr(last_slash_bin + 1);
+            }
             size_t dot_pos = coin_root_path.find_last_of(".");
             if (dot_pos != string::npos) {
                 coin_root_path = coin_root_path.substr(0, dot_pos);
             }
-            coin_root_path += "_coincidence.root";
+            coin_root_path = "root/" + coin_root_path + "_coincidence.root";
 
             TFile* f_coin = TFile::Open(coin_root_path.c_str(), "READ");
             if (f_coin && !f_coin->IsZombie()) {
@@ -197,17 +209,21 @@ int main(int argc, char* argv[]) {
                 cerr << "WARNING: Cannot open auto-mapped coincidence ROOT file -> " << coin_root_path << ". Decoding all events." << endl;
             }
         } else {
-            // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01.root)
+            // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> root/Cf252_tq_01.root)
             string tq_root_path = input_list_filename;
             size_t wave_pos = tq_root_path.find("wave");
             if (wave_pos != string::npos) {
                 tq_root_path.replace(wave_pos, 4, "tq");
             }
+            size_t last_slash_bin = tq_root_path.find_last_of("/\\");
+            if (last_slash_bin != string::npos) {
+                tq_root_path = tq_root_path.substr(last_slash_bin + 1);
+            }
             size_t dot_pos = tq_root_path.find_last_of(".");
             if (dot_pos != string::npos) {
                 tq_root_path = tq_root_path.substr(0, dot_pos);
             }
-            tq_root_path += ".root";
+            tq_root_path = "root/" + tq_root_path + ".root";
 
             TFile* f_tq = TFile::Open(tq_root_path.c_str(), "READ");
             if (f_tq && !f_tq->IsZombie()) {

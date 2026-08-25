@@ -34,13 +34,19 @@ int main(int argc, char** argv) {
     if (argc > 2) {
         output_path = argv[2];
     } else {
-        size_t last_dot = input_path.find_last_of(".");
-        if (last_dot != std::string::npos) {
-            output_path = input_path.substr(0, last_dot) + "_coincidence.root";
-        } else {
-            output_path = input_path + "_coincidence.root";
+        std::string base_filename = input_path;
+        size_t last_slash_in = base_filename.find_last_of("/\\");
+        if (last_slash_in != std::string::npos) {
+            base_filename = base_filename.substr(last_slash_in + 1);
         }
+        size_t last_dot = base_filename.find_last_of(".");
+        if (last_dot != std::string::npos) {
+            base_filename = base_filename.substr(0, last_dot);
+        }
+        output_path = "root/" + base_filename + "_coincidence.root";
     }
+
+    gSystem->mkdir("root", true);
 
     TFile* fin = TFile::Open(input_path.c_str(), "READ");
     if (!fin || fin->IsZombie()) {

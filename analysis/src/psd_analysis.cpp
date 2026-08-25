@@ -43,13 +43,19 @@ int main(int argc, char* argv[]) {
     }
 
     if (output_path.empty()) {
-        output_path = input_path;
-        size_t last_dot = output_path.find_last_of(".");
-        if (last_dot != string::npos) {
-            output_path = output_path.substr(0, last_dot);
+        string base_filename = input_path;
+        size_t last_slash_in = base_filename.find_last_of("/\\");
+        if (last_slash_in != string::npos) {
+            base_filename = base_filename.substr(last_slash_in + 1);
         }
-        output_path += "_psd.root";
+        size_t last_dot = base_filename.find_last_of(".");
+        if (last_dot != string::npos) {
+            base_filename = base_filename.substr(0, last_dot);
+        }
+        output_path = "root/" + base_filename + "_psd.root";
     }
+
+    gSystem->mkdir("root", true);
 
     TFile* file = TFile::Open(input_path.c_str(), "READ");
     if (!file || file->IsZombie()) {
