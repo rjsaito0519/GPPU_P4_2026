@@ -4,6 +4,9 @@
 # エラーが起きたらスクリプトを停止する
 set -e
 
+# Ctrl+C などの終了シグナルを受け取ったときに、バックグラウンドのすべての子プロセスを終了させる
+trap "kill 0" EXIT
+
 echo "=== Starting Full Waveform Decoding and Merging Process ==="
 
 # root/ ディレクトリの作成 (念のため)
