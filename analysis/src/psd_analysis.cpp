@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
 
     // ゲート定義（ピーク波高の割合で決定）
     const int n_pre_peak = 10;          // ピーク手前の積分開始オフセット
-    const double fraction_short = 0.50; // Q_shortの終了点: ピーク高の50%以下まで減衰した位置
+    const double fraction_short = 0.95; // Q_shortの終了点: ピーク高の50%以下まで減衰した位置
     const double fraction_long = 0.10;  // Q_longの終了点: ピーク高の10%以下まで減衰した位置
 
     // wave2tq互換固定ゲートQ1用のパラメータ
@@ -79,12 +79,16 @@ int main(int argc, char* argv[]) {
     Double_t Q1;
     Double_t baseline;
     Double_t peak_time;
+    Double_t t_short; // ピークからQ_short判定点までの時間差 (ns)
+    Double_t t_long;  // ピークからQ_long判定点までの時間差 (ns)
 
     psd_tree->Branch("event", &event, "event/I");
     psd_tree->Branch("time_stamp", &time_stamp, "time_stamp/l");
     psd_tree->Branch("Q_long", &Q_long, "Q_long/D");
     psd_tree->Branch("Q_short", &Q_short, "Q_short/D");
     psd_tree->Branch("Q1", &Q1, "Q1/D");
+    psd_tree->Branch("t_short", &t_short, "t_short/D");
+    psd_tree->Branch("t_long", &t_long, "t_long/D");
     psd_tree->Branch("PSD", &PSD, "PSD/D");
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
@@ -163,6 +167,10 @@ int main(int argc, char* argv[]) {
         while (k_long_end < _DT5751Length && wave[k_long_end] > fraction_long * max_val) {
             k_long_end++;
         }
+
+        // ピークトップから積分終了判定ポイントまでの時間差 (ns) の計算
+        t_short = (Double_t)(k_short_end - k_peak) * dt;
+        t_long = (Double_t)(k_long_end - k_peak) * dt;
 
         Q_short = 0.0;
         Q_long = 0.0;
