@@ -16,7 +16,7 @@ echo "--> Generating basic TQ and Coincidence files for Cf252..."
 for run in 01 02 03 04; do
     echo "Generating TQ & Coin for Cf252 run ${run}..."
     # TQ生成 (Cf252_wave_XX.dat -> root/Cf252_tq_XX.root)
-    ./bin/convert_to_root data/Cf252_wave_${run}.dat root/Cf252_tq_${run}.root
+    ./bin/convert_to_root data/Cf252_wave_${run}.dat ${run} 0.0 root/Cf252_tq_${run}.root
     # コインシデンス解析 (root/Cf252_tq_XX.root -> root/Cf252_tq_XX_coincidence.root)
     ./bin/coincidence_analysis root/Cf252_tq_${run}.root root/Cf252_tq_${run}_coincidence.root
 done
@@ -25,7 +25,7 @@ echo "--> Generating basic TQ files for Co60..."
 for run in 02 03; do
     echo "Generating TQ for Co60 run ${run}..."
     # TQ生成 (Co60_wave_XX.dat -> root/Co60_tq_XX.root)
-    ./bin/convert_to_root data/Co60_wave_${run}.dat root/Co60_tq_${run}.root
+    ./bin/convert_to_root data/Co60_wave_${run}.dat ${run} 0.0 root/Co60_tq_${run}.root
 done
 
 # -----------------------------------------------------------------------------
