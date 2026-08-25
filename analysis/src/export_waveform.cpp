@@ -17,13 +17,23 @@ typedef struct {
 } DT5751WFdata;
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        cerr << "Usage: " << argv[0] << " <input_list_filename> <output_root_filename>" << endl;
+    if (argc < 2) {
+        cerr << "Usage: " << argv[0] << " <input_list_filename> [output_root_filename]" << endl;
         return 1;
     }
 
     string input_list_filename = argv[1];
-    string output_root_filename = argv[2];
+    string output_root_filename = "";
+    if (argc > 2) {
+        output_root_filename = argv[2];
+    } else {
+        output_root_filename = input_list_filename;
+        size_t last_dot = output_root_filename.find_last_of(".");
+        if (last_dot != string::npos) {
+            output_root_filename = output_root_filename.substr(0, last_dot);
+        }
+        output_root_filename += ".root";
+    }
 
     ifstream flist(input_list_filename.c_str());
     if (!flist) {
