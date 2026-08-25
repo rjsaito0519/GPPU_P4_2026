@@ -34,9 +34,9 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    TTree* tree = (TTree*)file->Get("coincidence_tree");
+    TTree* tree = (TTree*)file->Get("tree");
     if (!tree) {
-        std::cerr << "Error: Cannot find TTree 'coincidence_tree' in input file" << std::endl;
+        std::cerr << "Error: Cannot find TTree 'tree' in input file" << std::endl;
         file->Close();
         return 1;
     }
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
 
     c->Clear();
     c->Divide(2, 2);
-    int pad_idx = 1;
+    Int_t pad_idx = 1;
 
     for (const auto& gate : gates) {
         Double_t q_min = gate.first;

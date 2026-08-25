@@ -10,8 +10,8 @@
 
 using namespace std;
 
-static const int _DT5751DataSize = 2090;
-static const int _DT5751Length = 1029;
+static const Int_t _DT5751DataSize = 2090;
+static const Int_t _DT5751Length = 1029;
 
 typedef struct {
     unsigned int header[8];
@@ -101,17 +101,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    int _numOfChannels = 0;
-    int _numOfFiles = 0;
+    Int_t _numOfChannels = 0;
+    Int_t _numOfFiles = 0;
 
-    const int MAX_N_channels = 4;
-    const int MAX_N_files = 1000;
+    const Int_t MAX_N_channels = 4;
+    const Int_t MAX_N_files = 1000;
 
     vector<vector<string>> list_filename(MAX_N_channels, vector<string>(MAX_N_files, ""));
 
-    int ch_idx = -1;
-    int file_idx = -1;
-    char Buffer[256];
+    Int_t ch_idx = -1;
+    Int_t file_idx = -1;
+    Char_t Buffer[256];
 
     while (flist.getline(Buffer, sizeof(Buffer))) {
         if (Buffer[0] == '#') continue;
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
     }
 
     // TTree の定義（生データのみ）
-    TTree* tree = new TTree("wave_tree", "Raw Waveform Tree");
+    TTree* tree = new TTree("tree", "Raw Waveform Tree");
 
     Int_t event;
     ULong64_t time_stamp;
@@ -172,7 +172,7 @@ int main(int argc, char* argv[]) {
 
             TFile* f_coin = TFile::Open(coin_root_path.c_str(), "READ");
             if (f_coin && !f_coin->IsZombie()) {
-                TTree* t_coin = (TTree*)f_coin->Get("coincidence_tree");
+                TTree* t_coin = (TTree*)f_coin->Get("tree");
                 if (t_coin) {
                     Int_t ev;
                     if (target_mode == "fastn") {
@@ -259,13 +259,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    char* buf = new char[_DT5751DataSize];
+    Char_t* buf = new Char_t[_DT5751DataSize];
 
-    for (int j = 0; j < _numOfFiles; j++) {
+    for (Int_t j = 0; j < _numOfFiles; j++) {
         vector<ifstream*> ifs(_numOfChannels, nullptr);
 
         // Open input binary files for this subset
-        for (int i = 0; i < _numOfChannels; i++) {
+        for (Int_t i = 0; i < _numOfChannels; i++) {
             ifs[i] = new ifstream();
             string bin_path = list_filename[i][j];
             
@@ -286,7 +286,7 @@ int main(int argc, char* argv[]) {
                 paths_to_try.push_back(list_dir + basename);             // 5. 【賢い吸収】リストと同じフォルダの直下の純粋なファイル名
             }
             
-            bool opened = false;
+            Bool_t opened = false;
             for (const auto& p : paths_to_try) {
                 ifs[i]->open(p.c_str(), ios::binary);
                 if (ifs[i]->is_open()) {
@@ -306,10 +306,10 @@ int main(int argc, char* argv[]) {
         cout << "Processing file subset " << j + 1 << "/" << _numOfFiles << "..." << endl;
 
         while (true) {
-            bool eof_flag = false;
-            int active_files = 0;
+            Bool_t eof_flag = false;
+            Int_t active_files = 0;
             
-            for (int i = 0; i < _numOfChannels; i++) {
+            for (Int_t i = 0; i < _numOfChannels; i++) {
                 // オープンできていないファイル（チャンネル）はスキップ
                 if (!ifs[i] || !ifs[i]->is_open()) {
                     continue;
@@ -328,7 +328,7 @@ int main(int argc, char* argv[]) {
                 channel = i;
 
                 // 生波形のコピー
-                for (int k = 0; k < _DT5751Length; k++) {
+                for (Int_t k = 0; k < _DT5751Length; k++) {
                     wave_raw[k] = wf->waveform[k];
                 }
 
@@ -344,7 +344,7 @@ int main(int argc, char* argv[]) {
             if (active_files == 0 || eof_flag) {
                 if (eof_flag) {
                     // 各ファイルが終端に達したか確認
-                    for (int i = 0; i < _numOfChannels; i++) {
+                    for (Int_t i = 0; i < _numOfChannels; i++) {
                         if (ifs[i] && ifs[i]->is_open() && !ifs[i]->eof()) {
                             ifs[i]->peek(); 
                             if (!ifs[i]->eof()) {
@@ -358,7 +358,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Close files of this subset
-        for (int i = 0; i < _numOfChannels; i++) {
+        for (Int_t i = 0; i < _numOfChannels; i++) {
             if (ifs[i]) {
                 if (ifs[i]->is_open()) {
                     ifs[i]->close();

@@ -12,7 +12,7 @@
 
 using namespace std;
 
-static const int _DT5751Length = 1029;
+static const Int_t _DT5751Length = 1029;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
@@ -28,9 +28,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    TTree* tree = (TTree*)file->Get("wave_tree");
+    TTree* tree = (TTree*)file->Get("tree");
     if (!tree) {
-        cerr << "ERROR: cannot find TTree 'wave_tree' in input file" << endl;
+        cerr << "ERROR: cannot find TTree 'tree' in input file" << endl;
         file->Close();
         return 1;
     }

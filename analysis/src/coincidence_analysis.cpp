@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
     // 出力ファイルの準備 & 同時ペア解析
     // -------------------------------------------------------------
     TFile* fout = new TFile(output_path.c_str(), "RECREATE");
-    TTree* out_tree = new TTree("coincidence_tree", "Coincidence Analysis Results");
+    TTree* out_tree = new TTree("tree", "Coincidence Analysis Results");
 
     Int_t out_fast_event;
     Long64_t out_fast_TS;

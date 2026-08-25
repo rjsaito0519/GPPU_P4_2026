@@ -16,20 +16,20 @@
 
 using namespace std;
 
-static const int _DT5751Length = 1029;
-
+static const Int_t _DT5751Length = 1029;
+ 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         cerr << "Usage: " << argv[0] << " <input_root_file> [--n num_events] [--ch channel] [--norm 0|1]" << endl;
         return 1;
     }
-
+ 
     string input_path = argv[1];
-    int num_to_overlay = 20;
-    int target_ch = 1;
-    int norm_flag = 1; // デフォルトで縦軸を 1.0 に規格化する
-
-    for (int i = 2; i < argc; ++i) {
+    Int_t num_to_overlay = 20;
+    Int_t target_ch = 1;
+    Int_t norm_flag = 1; // デフォルトで縦軸を 1.0 に規格化する
+ 
+    for (Int_t i = 2; i < argc; ++i) {
         string arg = argv[i];
         if (arg == "--n" && i + 1 < argc) {
             num_to_overlay = stoi(argv[++i]);
@@ -46,9 +46,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    TTree* wave_tree = (TTree*)file->Get("wave_tree");
+    TTree* wave_tree = (TTree*)file->Get("tree");
     if (!wave_tree) {
-        cerr << "ERROR: cannot find TTree 'wave_tree' in input file" << endl;
+        cerr << "ERROR: cannot find TTree 'tree' in input file" << endl;
         file->Close();
         return 1;
     }
@@ -78,19 +78,19 @@ int main(int argc, char* argv[]) {
     mg->SetTitle(title.c_str());
 
     Long64_t n_entries = wave_tree->GetEntries();
-    int count = 0;
-
-    const double threshold = 10.0;
-    const int n_baseline_length = 200;
-
+    Int_t count = 0;
+ 
+    const Double_t threshold = 10.0;
+    const Int_t n_baseline_length = 200;
+ 
     // カラーパレットの準備 (重ね書き用に見やすい色を選択)
-    vector<int> colors = {kBlue, kRed, kGreen+2, kOrange+1, kMagenta, kCyan+2, kViolet, kPink-3, kTeal+9, kAzure+2};
+    vector<Int_t> colors = {kBlue, kRed, kGreen+2, kOrange+1, kMagenta, kCyan+2, kViolet, kPink-3, kTeal+9, kAzure+2};
 
     cout << "Scanning events and aligning waveforms..." << endl;
 
     for (Long64_t i = 0; i < n_entries; ++i) {
         if (count >= num_to_overlay) break;
-
+ 
         wave_tree->GetEntry(i);
 
         if (channel != target_ch) {
@@ -98,34 +98,34 @@ int main(int argc, char* argv[]) {
         }
 
         // 1. ベースライン計算
-        double sum_wave = 0.0;
-        int n_wave = 0;
-        for (int k = 0; k < n_baseline_length; ++k) {
-            sum_wave += (double)wave_raw[k];
+        Double_t sum_wave = 0.0;
+        Int_t n_wave = 0;
+        for (Int_t k = 0; k < n_baseline_length; ++k) {
+            sum_wave += (Double_t)wave_raw[k];
             n_wave++;
         }
-        double baseline_rough = sum_wave / double(n_wave);
-
+        Double_t baseline_rough = sum_wave / Double_t(n_wave);
+ 
         sum_wave = 0.0;
         n_wave = 0;
-        for (int k = 0; k < n_baseline_length; ++k) {
-            if (abs((double)wave_raw[k] - baseline_rough) < threshold) {
-                sum_wave += (double)wave_raw[k];
+        for (Int_t k = 0; k < n_baseline_length; ++k) {
+            if (abs((Double_t)wave_raw[k] - baseline_rough) < threshold) {
+                sum_wave += (Double_t)wave_raw[k];
                 n_wave++;
             }
         }
-        double baseline = (n_wave > 0) ? (sum_wave / double(n_wave)) : baseline_rough;
-
+        Double_t baseline = (n_wave > 0) ? (sum_wave / Double_t(n_wave)) : baseline_rough;
+ 
         // 2. 反転差分波形の作成
-        vector<double> wave(_DT5751Length);
-        for (int k = 0; k < _DT5751Length; ++k) {
-            wave[k] = baseline - (double)wave_raw[k];
+        vector<Double_t> wave(_DT5751Length);
+        for (Int_t k = 0; k < _DT5751Length; ++k) {
+            wave[k] = baseline - (Double_t)wave_raw[k];
         }
-
+ 
         // 3. ピークサーチ (300 ~ 500 ns)
-        double max_val = -99999.0;
-        int k_peak = -1;
-        for (int k = 300; k < 500; ++k) {
+        Double_t max_val = -99999.0;
+        Int_t k_peak = -1;
+        for (Int_t k = 300; k < 500; ++k) {
             if (wave[k] > max_val) {
                 max_val = wave[k];
                 k_peak = k;
@@ -137,11 +137,11 @@ int main(int argc, char* argv[]) {
         }
 
         // 4. ピーク合わせ TGraph の構築
-        vector<double> x(_DT5751Length);
-        vector<double> y(_DT5751Length);
-
-        for (int k = 0; k < _DT5751Length; ++k) {
-            x[k] = (double)(k - k_peak); // 横軸: ピーク位置を 0 ns に揃える
+        vector<Double_t> x(_DT5751Length);
+        vector<Double_t> y(_DT5751Length);
+ 
+        for (Int_t k = 0; k < _DT5751Length; ++k) {
+            x[k] = (Double_t)(k - k_peak); // 横軸: ピーク位置を 0 ns に揃える
             if (norm_flag) {
                 y[k] = wave[k] / max_val; // 縦軸: ピーク高を 1.0 に規格化
             } else {
@@ -150,7 +150,7 @@ int main(int argc, char* argv[]) {
         }
 
         TGraph* g = new TGraph(_DT5751Length, &x[0], &y[0]);
-        int col = colors[count % colors.size()];
+        Int_t col = colors[count % colors.size()];
         g->SetLineColor(col);
         g->SetLineWidth(1);
         
