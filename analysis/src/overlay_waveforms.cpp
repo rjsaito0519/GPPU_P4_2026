@@ -176,8 +176,19 @@ int main(int argc, char* argv[]) {
     
     c->Update();
     
+    // 入力ファイル名からベース名を取得 (例: data/Cf252_wave_01_slown.root -> Cf252_wave_01_slown)
+    string base_name = input_path;
+    size_t last_slash = base_name.find_last_of("/\\");
+    if (last_slash != string::npos) {
+        base_name = base_name.substr(last_slash + 1);
+    }
+    size_t last_dot = base_name.find_last_of(".");
+    if (last_dot != string::npos) {
+        base_name = base_name.substr(0, last_dot);
+    }
+
     // 画像およびPDFとして自動保存
-    string out_pdf = "pdf/waveform_overlay_ch" + to_string(target_ch) + (norm_flag ? "_norm" : "") + ".pdf";
+    string out_pdf = "pdf/" + base_name + "_overlay_ch" + to_string(target_ch) + (norm_flag ? "_norm" : "") + ".pdf";
     gSystem->mkdir("pdf", true);
     c->Print(out_pdf.c_str());
     cout << "Overlay plot saved to: " << out_pdf << endl;
