@@ -34,10 +34,14 @@ int main(int argc, char* argv[]) {
         string arg2 = argv[2];
         if (arg2.size() > 4 && arg2.substr(arg2.size() - 4) == ".txt") {
             event_list_txt = arg2;
-        } else if (arg2 == "n" || arg2 == "gamma" || arg2 == "g" || arg2 == "N" || arg2 == "GAMMA") {
+        } else if (arg2 == "n" || arg2 == "gamma" || arg2 == "g" || arg2 == "N" || arg2 == "GAMMA" ||
+                   arg2 == "fastn" || arg2 == "fn" || arg2 == "FASTN" || arg2 == "FN" ||
+                   arg2 == "slown" || arg2 == "sn" || arg2 == "SLOWN" || arg2 == "SN") {
             target_mode = arg2;
             if (target_mode == "N") target_mode = "n";
             if (target_mode == "GAMMA" || target_mode == "g") target_mode = "gamma";
+            if (target_mode == "FASTN" || target_mode == "fn" || target_mode == "FN") target_mode = "fastn";
+            if (target_mode == "SLOWN" || target_mode == "sn" || target_mode == "SN") target_mode = "slown";
         } else {
             output_root_filename = arg2;
         }
@@ -49,6 +53,8 @@ int main(int argc, char* argv[]) {
             target_mode = arg2;
             if (target_mode == "N") target_mode = "n";
             if (target_mode == "GAMMA" || target_mode == "g") target_mode = "gamma";
+            if (target_mode == "FASTN" || target_mode == "fn" || target_mode == "FN") target_mode = "fastn";
+            if (target_mode == "SLOWN" || target_mode == "sn" || target_mode == "SN") target_mode = "slown";
         }
         output_root_filename = argv[3];
     }
@@ -151,52 +157,93 @@ int main(int argc, char* argv[]) {
     bool use_event_filter = false;
 
     if (!target_mode.empty()) {
-        // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01.root)
-        string tq_root_path = input_list_filename;
-        size_t wave_pos = tq_root_path.find("wave");
-        if (wave_pos != string::npos) {
-            tq_root_path.replace(wave_pos, 4, "tq");
-        }
-        size_t dot_pos = tq_root_path.find_last_of(".");
-        if (dot_pos != string::npos) {
-            tq_root_path = tq_root_path.substr(0, dot_pos);
-        }
-        tq_root_path += ".root";
+        if (target_mode == "fastn" || target_mode == "slown") {
+            // coinファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01_coincidence.root)
+            string coin_root_path = input_list_filename;
+            size_t wave_pos = coin_root_path.find("wave");
+            if (wave_pos != string::npos) {
+                coin_root_path.replace(wave_pos, 4, "tq");
+            }
+            size_t dot_pos = coin_root_path.find_last_of(".");
+            if (dot_pos != string::npos) {
+                coin_root_path = coin_root_path.substr(0, dot_pos);
+            }
+            coin_root_path += "_coincidence.root";
 
-        TFile* f_tq = TFile::Open(tq_root_path.c_str(), "READ");
-        if (f_tq && !f_tq->IsZombie()) {
-            TTree* t_tq = (TTree*)f_tq->Get("tree"); // convert_to_rootのデフォルトツリーは "tree"
-            if (t_tq) {
-                Int_t ev;
-                Double_t t0, t1;
-                t_tq->SetBranchAddress("event", &ev);
-                t_tq->SetBranchAddress("T0", &t0);
-                t_tq->SetBranchAddress("T1", &t1);
-                
-                Long64_t ents = t_tq->GetEntries();
-                for (Long64_t k = 0; k < ents; ++k) {
-                    t_tq->GetEntry(k);
-                    Double_t diff = t1 - t0;
-                    if (target_mode == "gamma") {
-                        if (diff >= 40.0 && diff < 60.0) {
-                            target_events.insert(ev);
-                        }
-                    } else if (target_mode == "n") {
-                        if (diff >= 60.0 && diff <= 120.0) {
-                            target_events.insert(ev);
+            TFile* f_coin = TFile::Open(coin_root_path.c_str(), "READ");
+            if (f_coin && !f_coin->IsZombie()) {
+                TTree* t_coin = (TTree*)f_coin->Get("coincidence_tree");
+                if (t_coin) {
+                    Int_t ev;
+                    if (target_mode == "fastn") {
+                        t_coin->SetBranchAddress("fast_event", &ev);
+                    } else {
+                        t_coin->SetBranchAddress("slow_event", &ev);
+                    }
+                    Long64_t ents = t_coin->GetEntries();
+                    for (Long64_t k = 0; k < ents; ++k) {
+                        t_coin->GetEntry(k);
+                        target_events.insert(ev);
+                    }
+                    use_event_filter = true;
+                    cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
+                         << "' from auto-mapped coincidence file: " << coin_root_path << endl;
+                } else {
+                    cerr << "WARNING: Cannot find TTree 'coincidence_tree' in mapped file -> " << coin_root_path << endl;
+                }
+                f_coin->Close();
+                delete f_coin;
+            } else {
+                cerr << "WARNING: Cannot open auto-mapped coincidence ROOT file -> " << coin_root_path << ". Decoding all events." << endl;
+            }
+        } else {
+            // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01.root)
+            string tq_root_path = input_list_filename;
+            size_t wave_pos = tq_root_path.find("wave");
+            if (wave_pos != string::npos) {
+                tq_root_path.replace(wave_pos, 4, "tq");
+            }
+            size_t dot_pos = tq_root_path.find_last_of(".");
+            if (dot_pos != string::npos) {
+                tq_root_path = tq_root_path.substr(0, dot_pos);
+            }
+            tq_root_path += ".root";
+
+            TFile* f_tq = TFile::Open(tq_root_path.c_str(), "READ");
+            if (f_tq && !f_tq->IsZombie()) {
+                TTree* t_tq = (TTree*)f_tq->Get("tree"); // convert_to_rootのデフォルトツリーは "tree"
+                if (t_tq) {
+                    Int_t ev;
+                    Double_t t0, t1;
+                    t_tq->SetBranchAddress("event", &ev);
+                    t_tq->SetBranchAddress("T0", &t0);
+                    t_tq->SetBranchAddress("T1", &t1);
+                    
+                    Long64_t ents = t_tq->GetEntries();
+                    for (Long64_t k = 0; k < ents; ++k) {
+                        t_tq->GetEntry(k);
+                        Double_t diff = t1 - t0;
+                        if (target_mode == "gamma") {
+                            if (diff >= 40.0 && diff < 60.0) {
+                                target_events.insert(ev);
+                            }
+                        } else if (target_mode == "n") {
+                            if (diff >= 60.0 && diff <= 120.0) {
+                                target_events.insert(ev);
+                            }
                         }
                     }
+                    use_event_filter = true;
+                    cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
+                         << "' (T1-T0 range) from auto-mapped TQ file: " << tq_root_path << endl;
+                } else {
+                    cerr << "WARNING: Cannot find TTree 'tree' in mapped TQ file -> " << tq_root_path << endl;
                 }
-                use_event_filter = true;
-                cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
-                     << "' (T1-T0 range) from auto-mapped TQ file: " << tq_root_path << endl;
+                f_tq->Close();
+                delete f_tq;
             } else {
-                cerr << "WARNING: Cannot find TTree 'tree' in mapped TQ file -> " << tq_root_path << endl;
+                cerr << "WARNING: Cannot open auto-mapped TQ ROOT file -> " << tq_root_path << ". Decoding all events." << endl;
             }
-            f_tq->Close();
-            delete f_tq;
-        } else {
-            cerr << "WARNING: Cannot open auto-mapped TQ ROOT file -> " << tq_root_path << ". Decoding all events." << endl;
         }
     } else if (!event_list_txt.empty()) {
         ifstream fev(event_list_txt.c_str());
