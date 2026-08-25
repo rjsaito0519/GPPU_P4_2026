@@ -187,14 +187,20 @@ int main(int argc, char* argv[]) {
                 TTree* t_coin = (TTree*)f_coin->Get("tree");
                 if (t_coin) {
                     Int_t ev;
+                    Double_t delta_T_us = 0.0;
                     if (target_mode == "fastn") {
                         t_coin->SetBranchAddress("fast_event", &ev);
                     } else {
                         t_coin->SetBranchAddress("slow_event", &ev);
+                        t_coin->SetBranchAddress("delta_T_us", &delta_T_us);
                     }
                     Long64_t ents = t_coin->GetEntries();
                     for (Long64_t k = 0; k < ents; ++k) {
                         t_coin->GetEntry(k);
+                        // slown モードの場合、purity 向上のため 500 us 以下の相関イベントのみに制限
+                        if (target_mode == "slown" && delta_T_us > 500.0) {
+                            continue;
+                        }
                         target_events.insert(ev);
                     }
                     use_event_filter = true;
