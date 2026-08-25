@@ -10,6 +10,7 @@
 #include <TMultiGraph.h>
 #include <TApplication.h>
 #include <TSystem.h>
+#include <TAxis.h>
 #include <TStyle.h>
 #include <TLegend.h>
 
