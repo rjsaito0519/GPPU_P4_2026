@@ -39,11 +39,11 @@ tmux kill-session -t decode_wf 2>/dev/null || true
 # -----------------------------------------------------------------------------
 echo "--> Launching Cf252 runs (01-04) in a 2x2 tmux window..."
 
-# 各ラン用のコマンドを定義
-cmd_cf01="./bin/convert_to_root data/Cf252_tq_01.dat 1 0.0 root/Cf252_tq_01.root && ./bin/coincidence_analysis root/Cf252_tq_01.root root/Cf252_tq_01_coincidence.root && ./bin/export_waveform data/Cf252_wave_01.dat gamma && ./bin/export_waveform data/Cf252_wave_01.dat fastn && ./bin/export_waveform data/Cf252_wave_01.dat slown; touch root/.done_cf_01"
-cmd_cf02="./bin/convert_to_root data/Cf252_tq_02.dat 2 0.0 root/Cf252_tq_02.root && ./bin/coincidence_analysis root/Cf252_tq_02.root root/Cf252_tq_02_coincidence.root && ./bin/export_waveform data/Cf252_wave_02.dat gamma && ./bin/export_waveform data/Cf252_wave_02.dat fastn && ./bin/export_waveform data/Cf252_wave_02.dat slown; touch root/.done_cf_02"
-cmd_cf03="./bin/convert_to_root data/Cf252_tq_03.dat 3 0.0 root/Cf252_tq_03.root && ./bin/coincidence_analysis root/Cf252_tq_03.root root/Cf252_tq_03_coincidence.root && ./bin/export_waveform data/Cf252_wave_03.dat gamma && ./bin/export_waveform data/Cf252_wave_03.dat fastn && ./bin/export_waveform data/Cf252_wave_03.dat slown; touch root/.done_cf_03"
-cmd_cf04="./bin/convert_to_root data/Cf252_tq_04.dat 4 0.0 root/Cf252_tq_04.root && ./bin/coincidence_analysis root/Cf252_tq_04.root root/Cf252_tq_04_coincidence.root && ./bin/export_waveform data/Cf252_wave_04.dat gamma && ./bin/export_waveform data/Cf252_wave_04.dat fastn && ./bin/export_waveform data/Cf252_wave_04.dat slown; touch root/.done_cf_04"
+# 各ラン用のデコードコマンドを定義 (前処理は完了しているため export_waveform のみ実行)
+cmd_cf01="./bin/export_waveform data/Cf252_wave_01.dat gamma && ./bin/export_waveform data/Cf252_wave_01.dat fastn && ./bin/export_waveform data/Cf252_wave_01.dat slown; touch root/.done_cf_01"
+cmd_cf02="./bin/export_waveform data/Cf252_wave_02.dat gamma && ./bin/export_waveform data/Cf252_wave_02.dat fastn && ./bin/export_waveform data/Cf252_wave_02.dat slown; touch root/.done_cf_02"
+cmd_cf03="./bin/export_waveform data/Cf252_wave_03.dat gamma && ./bin/export_waveform data/Cf252_wave_03.dat fastn && ./bin/export_waveform data/Cf252_wave_03.dat slown; touch root/.done_cf_03"
+cmd_cf04="./bin/export_waveform data/Cf252_wave_04.dat gamma && ./bin/export_waveform data/Cf252_wave_04.dat fastn && ./bin/export_waveform data/Cf252_wave_04.dat slown; touch root/.done_cf_04"
 
 # 新しい tmux セッションをデタッチドモードで開始 (初期ペインで Cf252 run 01 を実行)
 tmux new-session -d -s decode_wf -n "Cf252_Decoding" "${cmd_cf01}"
@@ -77,9 +77,9 @@ sleep 1
     # -----------------------------------------------------------------------------
     echo "--> Cf252 runs completed. Starting Co60 runs (02-03) in a new window..."
     
-    # Co60 のコマンド
-    cmd_co02="./bin/convert_to_root data/Co60_tq_02.dat 2 0.0 root/Co60_tq_02.root && ./bin/export_waveform data/Co60_wave_02.dat gamma; touch root/.done_co_02"
-    cmd_co03="./bin/convert_to_root data/Co60_tq_03.dat 3 0.0 root/Co60_tq_03.root && ./bin/export_waveform data/Co60_wave_03.dat gamma; touch root/.done_co_03"
+    # Co60 のデコードコマンド
+    cmd_co02="./bin/export_waveform data/Co60_wave_02.dat gamma; touch root/.done_co_02"
+    cmd_co03="./bin/export_waveform data/Co60_wave_03.dat gamma; touch root/.done_co_03"
 
     # 新しいウィンドウを作成し、左右に分割 (初期ペインで Co60 run 02 を実行)
     tmux new-window -t decode_wf -n "Co60_Decoding" "${cmd_co02}"
