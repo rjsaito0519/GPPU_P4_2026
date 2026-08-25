@@ -3,6 +3,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <set>
+#include <algorithm>
 #include <TFile.h>
 #include <TTree.h>
 
@@ -18,21 +20,54 @@ typedef struct {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <input_list_filename> [output_root_filename]" << endl;
+        cerr << "Usage: " << argv[0] << " <input_list_filename> [event_list_txt] [output_root_filename]" << endl;
         return 1;
     }
 
     string input_list_filename = argv[1];
+    string event_list_txt = "";
     string output_root_filename = "";
-    if (argc > 2) {
-        output_root_filename = argv[2];
-    } else {
+
+    // 引数の賢い判定
+    if (argc == 3) {
+        string arg2 = argv[2];
+        // 第2引数の拡張子が .txt の場合はイベントリストとして扱う
+        if (arg2.size() > 4 && arg2.substr(arg2.size() - 4) == ".txt") {
+            event_list_txt = arg2;
+        } else {
+            output_root_filename = arg2;
+        }
+    } else if (argc > 3) {
+        event_list_txt = argv[2];
+        output_root_filename = argv[3];
+    }
+
+    // サフィックスの自動抽出 (例: data/Cf252_tq_merge_n_events.txt -> suffix = "_n")
+    string suffix = "";
+    if (!event_list_txt.empty()) {
+        size_t ev_pos = event_list_txt.find("_events.txt");
+        if (ev_pos != string::npos) {
+            size_t last_under = event_list_txt.find_last_of("_", ev_pos - 1);
+            if (last_under != string::npos) {
+                suffix = event_list_txt.substr(last_under, ev_pos - last_under); // "_n" や "_gamma" などを抽出
+            }
+        } else {
+            size_t dot_pos = event_list_txt.find_last_of(".");
+            size_t last_under = event_list_txt.find_last_of("_", dot_pos - 1);
+            if (last_under != string::npos && last_under < dot_pos) {
+                suffix = event_list_txt.substr(last_under, dot_pos - last_under);
+            }
+        }
+    }
+
+    // 出力先ROOTファイル名の自動生成 (サフィックスを付与)
+    if (output_root_filename.empty()) {
         output_root_filename = input_list_filename;
         size_t last_dot = output_root_filename.find_last_of(".");
         if (last_dot != string::npos) {
             output_root_filename = output_root_filename.substr(0, last_dot);
         }
-        output_root_filename += ".root";
+        output_root_filename += suffix + ".root"; // 例: Cf252_wave_01_n.root などのサフィックス付き
     }
 
     string list_dir = "";
@@ -97,6 +132,23 @@ int main(int argc, char* argv[]) {
     tree->Branch("time_stamp", &time_stamp, "time_stamp/l");
     tree->Branch("channel", &channel, "channel/I");
     tree->Branch("wave_raw", wave_raw, Form("wave_raw[%d]/s", _DT5751Length));
+
+    // イベントフィルターリストのロード
+    set<Int_t> target_events;
+    bool use_event_filter = false;
+    if (!event_list_txt.empty()) {
+        ifstream fev(event_list_txt.c_str());
+        if (fev) {
+            Int_t ev;
+            while (fev >> ev) {
+                target_events.insert(ev);
+            }
+            use_event_filter = true;
+            cout << "Loaded " << target_events.size() << " target events from filter list: " << event_list_txt << endl;
+        } else {
+            cerr << "WARNING: cannot open event filter list -> " << event_list_txt << ". Decoding all events." << endl;
+        }
+    }
 
     char* buf = new char[_DT5751DataSize];
 
@@ -169,6 +221,11 @@ int main(int argc, char* argv[]) {
                 // 生波形のコピー
                 for (int k = 0; k < _DT5751Length; k++) {
                     wave_raw[k] = wf->waveform[k];
+                }
+
+                // ターゲットリストに入っていないイベントはスキップ
+                if (use_event_filter && target_events.find(event) == target_events.end()) {
+                    continue;
                 }
 
                 // TTreeへの格納
