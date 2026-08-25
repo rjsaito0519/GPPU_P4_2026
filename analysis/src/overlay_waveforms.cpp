@@ -13,6 +13,7 @@
 #include <TAxis.h>
 #include <TStyle.h>
 #include <TLegend.h>
+#include <TLine.h>
 
 using namespace std;
 
@@ -20,7 +21,7 @@ static const Int_t _DT5751Length = 1029;
  
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <input_root_file> [--n num_events] [--ch channel] [--norm 0|1]" << endl;
+        cerr << "Usage: " << argv[0] << " <input_root_file> [--n num_events] [--ch channel] [--norm 0|1] [--pre pre_ns] [--short short_ns] [--long long_ns]" << endl;
         return 1;
     }
  
@@ -28,6 +29,9 @@ int main(int argc, char* argv[]) {
     Int_t num_to_overlay = 20;
     Int_t target_ch = 1;
     Int_t norm_flag = 1; // デフォルトで縦軸を 1.0 に規格化する
+    Int_t n_pre_peak = 10;
+    Int_t n_post_peak_short = 10;
+    Int_t n_post_peak_long = 30;
  
     for (Int_t i = 2; i < argc; ++i) {
         string arg = argv[i];
@@ -37,6 +41,12 @@ int main(int argc, char* argv[]) {
             target_ch = stoi(argv[++i]);
         } else if (arg == "--norm" && i + 1 < argc) {
             norm_flag = stoi(argv[++i]);
+        } else if (arg == "--pre" && i + 1 < argc) {
+            n_pre_peak = stoi(argv[++i]);
+        } else if (arg == "--short" && i + 1 < argc) {
+            n_post_peak_short = stoi(argv[++i]);
+        } else if (arg == "--long" && i + 1 < argc) {
+            n_post_peak_long = stoi(argv[++i]);
         }
     }
 
@@ -174,6 +184,25 @@ int main(int argc, char* argv[]) {
         mg->GetYaxis()->SetRangeUser(-0.1, 1.1);
     }
     
+    // 積分ゲート範囲を示す縦線 (TLine) の描画
+    Double_t ymin = norm_flag ? -0.1 : mg->GetYaxis()->GetXmin();
+    Double_t ymax = norm_flag ? 1.1 : mg->GetYaxis()->GetXmax();
+
+    auto draw_gate_line = [](Double_t x_pos, Double_t y_min, Double_t y_max, Int_t color) {
+        TLine* line = new TLine(x_pos, y_min, x_pos, y_max);
+        line->SetLineColor(color);
+        line->SetLineWidth(2);
+        line->SetLineStyle(2); // 破線
+        line->Draw("same");
+    };
+
+    // 積分開始 (Peak - pre_ns) -> 赤色破線
+    draw_gate_line(-(Double_t)n_pre_peak, ymin, ymax, kRed+1);
+    // Short積分終了 (Peak + short_ns) -> 青色破線
+    draw_gate_line((Double_t)n_post_peak_short, ymin, ymax, kBlue+1);
+    // Long積分終了 (Peak + long_ns) -> 緑色破線
+    draw_gate_line((Double_t)n_post_peak_long, ymin, ymax, kGreen+2);
+
     c->Update();
     
     // 入力ファイル名からベース名を取得 (例: data/Cf252_wave_01_slown.root -> Cf252_wave_01_slown)
