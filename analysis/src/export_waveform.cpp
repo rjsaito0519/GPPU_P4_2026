@@ -137,11 +137,8 @@ int main(int argc, char* argv[]) {
             }
 
             if (!opened) {
-                cerr << "ERROR: cannot open input binary file in any searched locations: " << endl;
-                for (const auto& p : paths_to_try) {
-                    cerr << "  - " << p << endl;
-                }
-                return 1;
+                // エラーで終了する代わりに、警告メッセージを出して is_open() = false のまま続行
+                cout << "WARNING: File not found in any searched locations. Skipping channel " << i << ": " << basename << endl;
             }
         }
 
@@ -149,8 +146,15 @@ int main(int argc, char* argv[]) {
 
         while (true) {
             bool eof_flag = false;
+            int active_files = 0;
             
             for (int i = 0; i < _numOfChannels; i++) {
+                // オープンできていないファイル（チャンネル）はスキップ
+                if (!ifs[i] || !ifs[i]->is_open()) {
+                    continue;
+                }
+                active_files++;
+
                 ifs[i]->read(buf, _DT5751DataSize);
                 if (ifs[i]->eof()) {
                     eof_flag = true;
@@ -171,13 +175,15 @@ int main(int argc, char* argv[]) {
                 tree->Fill();
             }
 
-            if (eof_flag) {
-                // 各ファイルが終端に達したか確認
-                for (int i = 0; i < _numOfChannels; i++) {
-                    if (!ifs[i]->eof()) {
-                        ifs[i]->peek(); 
-                        if (!ifs[i]->eof()) {
-                            cerr << "WARNING: file size mismatch in file subset index " << j << endl;
+            if (active_files == 0 || eof_flag) {
+                if (eof_flag) {
+                    // 各ファイルが終端に達したか確認
+                    for (int i = 0; i < _numOfChannels; i++) {
+                        if (ifs[i] && ifs[i]->is_open() && !ifs[i]->eof()) {
+                            ifs[i]->peek(); 
+                            if (!ifs[i]->eof()) {
+                                cerr << "WARNING: file size mismatch in file subset index " << j << endl;
+                            }
                         }
                     }
                 }
@@ -187,8 +193,12 @@ int main(int argc, char* argv[]) {
 
         // Close files of this subset
         for (int i = 0; i < _numOfChannels; i++) {
-            ifs[i]->close();
-            delete ifs[i];
+            if (ifs[i]) {
+                if (ifs[i]->is_open()) {
+                    ifs[i]->close();
+                }
+                delete ifs[i];
+            }
         }
     }
 
