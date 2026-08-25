@@ -61,7 +61,7 @@ echo "--> Pre-processing completed."
 # -----------------------------------------------------------------------------
 # 2. Cf252 データの並列デコード (4並列: 2x2 画面分割、ログ保存)
 # -----------------------------------------------------------------------------
-echo "--> Launching Cf252 runs (01-04) in a 2x2 tmux window (logging to root/log_decode_cf_XX.log)..."
+echo "--> Initializing Cf252 runs (01-04) in tmux..."
 
 # 各ラン用のデコードコマンドを定義 (tee により画面表示しつつログファイルにも記録)
 cmd_cf01="(./bin/export_waveform data/Cf252_wave_01.dat gamma && ./bin/export_waveform data/Cf252_wave_01.dat fastn && ./bin/export_waveform data/Cf252_wave_01.dat slown) 2>&1 | tee root/log_decode_cf_01.log; touch root/.done_cf_01"
@@ -84,29 +84,28 @@ sleep 0.2
 tmux split-window -v -t decode_wf:0.1 "${cmd_cf04}"
 sleep 0.2
 
+# -----------------------------------------------------------------------------
+# 3. Co60 データの並列デコード (2並列: 左右2画面分割、Cf252完了まで待機)
+# -----------------------------------------------------------------------------
+echo "--> Initializing Co60 runs (02-03) in tmux (will wait for Cf252 to finish)..."
+
+# Co60 のデコードコマンド (Cf252の完了フラグができるまで待機してからデコードを実行)
+wait_cmd="while [ ! -f root/.done_cf_01 ] || [ ! -f root/.done_cf_02 ] || [ ! -f root/.done_cf_03 ] || [ ! -f root/.done_cf_04 ]; do sleep 2; done"
+cmd_co02="${wait_cmd} && ./bin/export_waveform data/Co60_wave_02.dat gamma 2>&1 | tee root/log_decode_co_02.log; touch root/.done_co_02"
+cmd_co03="${wait_cmd} && ./bin/export_waveform data/Co60_wave_03.dat gamma 2>&1 | tee root/log_decode_co_03.log; touch root/.done_co_03"
+
+# 新しいウィンドウを作成し、左右に分割 (初期ペインで Co60 run 02 を実行)
+tmux new-window -t decode_wf:1 -n "Co60_Decoding" "${cmd_co02}"
+sleep 0.5
+tmux split-window -h -t decode_wf:1.0 "${cmd_co03}"
+sleep 0.2
+
 # 進捗を視覚的に確認できるようにアタッチ
-echo "Attaching to tmux. You will see 4 divided screens showing decoding progress."
-echo "Once Cf252 runs are complete, the script will automatically proceed to Co60 runs."
+echo "Attaching to tmux. You will see 4 divided screens showing Cf252 decoding."
+echo "Window 0: Cf252_Decoding, Window 1: Co60_Decoding (active window list: Ctrl+b, w)"
 echo "Press Ctrl+C to abort everything."
 sleep 1
 
-# バックグラウンドでアタッチ待ちしつつ、Cf252の完了をポーリング監視する
-(
-    while [ ! -f root/.done_cf_01 ] || [ ! -f root/.done_cf_02 ] || [ ! -f root/.done_cf_03 ] || [ ! -f root/.done_cf_04 ]; do
-        sleep 2
-    done
-    
-    # -----------------------------------------------------------------------------
-    # 3. Co60 データの並列デコード (2並列: 左右2画面分割、ログ保存)
-    # -----------------------------------------------------------------------------
-    echo "--> Cf252 runs completed. Starting Co60 runs (02-03) in a new window..."
-    
-    # Co60 のデコードコマンド
-    cmd_co02="./bin/export_waveform data/Co60_wave_02.dat gamma 2>&1 | tee root/log_decode_co_02.log; touch root/.done_co_02"
-    cmd_co03="./bin/export_waveform data/Co60_wave_03.dat gamma 2>&1 | tee root/log_decode_co_03.log; touch root/.done_co_03"
-
-    # 新しいウィンドウを作成し、左右に分割 (初期ペインで Co60 run 02 を実行)
-    tmux new-window -t decode_wf -n "Co60_Decoding" "${cmd_co02}"
     sleep 0.5
     tmux split-window -h -t decode_wf:1 "${cmd_co03}"
     
