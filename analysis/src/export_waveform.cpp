@@ -108,12 +108,21 @@ int main(int argc, char* argv[]) {
             ifs[i] = new ifstream();
             string bin_path = list_filename[i][j];
             
+            // ファイル名部分（basename）のみを抽出
+            string basename = bin_path;
+            size_t last_slash_bin = bin_path.find_last_of("/\\");
+            if (last_slash_bin != string::npos) {
+                basename = bin_path.substr(last_slash_bin + 1);
+            }
+            
             // 探索するパス候補のリストを作成
             vector<string> paths_to_try;
             paths_to_try.push_back(bin_path); // 1. リスト記載のそのままのパス
             if (!list_dir.empty()) {
-                paths_to_try.push_back(list_dir + bin_path);             // 2. リストと同じフォルダ
-                paths_to_try.push_back(list_dir + "rawdata/" + bin_path); // 3. リストと同じフォルダの rawdata/ 配下
+                paths_to_try.push_back(list_dir + bin_path);             // 2. リストと同じフォルダ直下の記載通りのパス
+                paths_to_try.push_back(list_dir + "rawdata/" + bin_path); // 3. リストと同じフォルダの rawdata/ 配下の記載通りのパス
+                paths_to_try.push_back(list_dir + "rawdata/" + basename); // 4. 【賢い吸収】リストと同じフォルダの rawdata/ 配下の純粋なファイル名
+                paths_to_try.push_back(list_dir + basename);             // 5. 【賢い吸収】リストと同じフォルダの直下の純粋なファイル名
             }
             
             bool opened = false;
