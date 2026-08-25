@@ -4,8 +4,9 @@ bin/
 obj/
 
 # Large data files
+rawdata/
+root/
 data/*.dat
-data/*.root
 
 # Results
 pdf/
