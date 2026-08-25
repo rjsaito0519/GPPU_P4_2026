@@ -49,10 +49,14 @@ int main(int argc, char* argv[]) {
     const double impedance = 50.0; // ohm
     const double dt = 1.0; // ns
 
-    // ゲート定義（ピーク波高の割合で決定）
+    // ゲート定義（ピークからの固定時間[ns]で決定）
     const int n_pre_peak = 10;          // ピーク手前の積分開始オフセット
-    const double fraction_short = 0.95; // Q_shortの終了点: ピーク高の50%以下まで減衰した位置
-    const double fraction_long = 0.10;  // Q_longの終了点: ピーク高の10%以下まで減衰した位置
+    const int gate_short = 30;          // Q_shortの積分窓幅 (10 ns pre + 20 ns post)
+    const int gate_long = 150;          // Q_longの積分窓幅 (10 ns pre + 140 ns post)
+
+    // 減衰時間差判定用の割合しきい値 (t_short, t_long計算用)
+    const double fraction_short = 0.50; // ピーク高の50%以下まで減衰する時間
+    const double fraction_long = 0.10;  // ピーク高の10%以下まで減衰する時間
 
     // wave2tq互換固定ゲートQ1用のパラメータ
     const int n_softtrigger_enable_length = 800; // software trigger enable length
@@ -95,8 +99,8 @@ int main(int argc, char* argv[]) {
 
     Long64_t n_entries = wave_tree->GetEntries();
     cout << "Analyzing waveforms (CH1 only) and calculating PSD..." << endl;
-    cout << " - Short gate threshold: " << fraction_short * 100.0 << " % of peak" << endl;
-    cout << " - Long gate threshold: " << fraction_long * 100.0 << " % of peak" << endl;
+    cout << " - Short gate: " << gate_short << " ns (fraction check: " << fraction_short * 100.0 << " % of peak)" << endl;
+    cout << " - Long gate: " << gate_long << " ns (fraction check: " << fraction_long * 100.0 << " % of peak)" << endl;
     cout << " - Target Output: " << output_path << endl;
 
     Long64_t analyzed_count = 0;
@@ -156,21 +160,26 @@ int main(int argc, char* argv[]) {
         int k_start = k_peak - n_pre_peak;
         if (k_start < 0) k_start = 0;
 
-        // Q_shortの積分終了点の決定 (ピーク以降で50%以下になる点)
-        int k_short_end = k_peak;
-        while (k_short_end < _DT5751Length && wave[k_short_end] > fraction_short * max_val) {
-            k_short_end++;
+        // Q_shortの積分終了点 (固定窓)
+        int k_short_end = min(_DT5751Length, k_start + gate_short);
+
+        // Q_longの積分終了点 (固定窓)
+        int k_long_end = min(_DT5751Length, k_start + gate_long);
+
+        // 減衰時間(t_short, t_long)算出のための減衰ポイント探索 (ピーク以降)
+        int k_decay_short = k_peak;
+        while (k_decay_short < _DT5751Length && wave[k_decay_short] > fraction_short * max_val) {
+            k_decay_short++;
         }
 
-        // Q_longの積分終了点の決定 (ピーク以降で10%以下になる点)
-        int k_long_end = k_peak;
-        while (k_long_end < _DT5751Length && wave[k_long_end] > fraction_long * max_val) {
-            k_long_end++;
+        int k_decay_long = k_peak;
+        while (k_decay_long < _DT5751Length && wave[k_decay_long] > fraction_long * max_val) {
+            k_decay_long++;
         }
 
-        // ピークトップから積分終了判定ポイントまでの時間差 (ns) の計算
-        t_short = (Double_t)(k_short_end - k_peak) * dt;
-        t_long = (Double_t)(k_long_end - k_peak) * dt;
+        // ピークトップから減衰判定ポイントまでの時間差 (ns) の計算
+        t_short = (Double_t)(k_decay_short - k_peak) * dt;
+        t_long = (Double_t)(k_decay_long - k_peak) * dt;
 
         Q_short = 0.0;
         Q_long = 0.0;
