@@ -6,6 +6,7 @@
 #include <TFile.h>
 #include <TTree.h>
 #include <TSystem.h>
+#include "progress_bar.h"
 
 using namespace std;
 
@@ -13,7 +14,7 @@ static const int _DT5751Length = 1029;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <input_waveform_root_file> [output_root_file] [--pre pre_ns] [--short short_ns] [--long long_ns] [--smooth 0|1]" << endl;
+        cerr << "Usage: " << argv[0] << " <input_waveform_root_file> [output_root_file] [--pre pre_ns] [--short short_ns] [--long long_ns] [--smooth 0|1] [--quiet]" << endl;
         return 1;
     }
 
@@ -23,6 +24,7 @@ int main(int argc, char* argv[]) {
     Int_t n_post_peak_short = 10;   // ピーク後のQ_short積分幅 [ns]
     Int_t n_post_peak_long = 30;    // ピーク後のQ_long積分幅 [ns]
     Int_t apply_smoothing = 1;      // デジタル平滑化の有効化 (1: On, 0: Off)
+    Bool_t quiet = false;           // プログレスバーの非表示フラグ
 
     // オプション引数の賢いパース
     for (Int_t i = 2; i < argc; ++i) {
@@ -35,6 +37,8 @@ int main(int argc, char* argv[]) {
             n_post_peak_long = stoi(argv[++i]);
         } else if (arg == "--smooth" && i + 1 < argc) {
             apply_smoothing = stoi(argv[++i]);
+        } else if (arg == "--quiet") {
+            quiet = true;
         } else {
             if (arg.find("--") == string::npos) {
                 output_path = arg;
@@ -125,6 +129,9 @@ int main(int argc, char* argv[]) {
     Long64_t analyzed_count = 0;
 
     for (Long64_t i = 0; i < n_entries; ++i) {
+        if (!quiet && (i % 1000 == 0 || i == n_entries - 1)) {
+            displayProgressBar(i + 1, n_entries);
+        }
         wave_tree->GetEntry(i);
 
         // 制限条件: CH1のみ解析 (CH0や他のCHはスキップ)
