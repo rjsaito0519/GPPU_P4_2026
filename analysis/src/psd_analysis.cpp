@@ -49,10 +49,10 @@ int main(int argc, char* argv[]) {
     const double impedance = 50.0; // ohm
     const double dt = 1.0; // ns
 
-    // ゲート幅定義
-    const int n_pre_peak = 10;       // ピーク手前の積分開始オフセット
-    const int gate_short = 32;       // Q_shortの積分幅
-    const int gate_long = 250;       // Q_longの積分幅
+    // ゲート定義（ピーク波高の割合で決定）
+    const int n_pre_peak = 10;          // ピーク手前の積分開始オフセット
+    const double fraction_short = 0.50; // Q_shortの終了点: ピーク高の50%以下まで減衰した位置
+    const double fraction_long = 0.10;  // Q_longの終了点: ピーク高の10%以下まで減衰した位置
 
     Int_t event;
     ULong64_t time_stamp;
@@ -145,17 +145,27 @@ int main(int argc, char* argv[]) {
         int k_start = k_peak - n_pre_peak;
         if (k_start < 0) k_start = 0;
 
+        // Q_shortの積分終了点の決定 (ピーク以降で50%以下になる点)
+        int k_short_end = k_peak;
+        while (k_short_end < _DT5751Length && wave[k_short_end] > fraction_short * max_val) {
+            k_short_end++;
+        }
+
+        // Q_longの積分終了点の決定 (ピーク以降で10%以下になる点)
+        int k_long_end = k_peak;
+        while (k_long_end < _DT5751Length && wave[k_long_end] > fraction_long * max_val) {
+            k_long_end++;
+        }
+
         Q_short = 0.0;
         Q_long = 0.0;
 
-        // Q_shortの積分 (k_start から 32 ns 間)
-        int k_short_end = min(_DT5751Length, k_start + gate_short);
+        // Q_shortの積分
         for (int k = k_start; k < k_short_end; ++k) {
             Q_short += (wave[k] / impedance * dt);
         }
 
-        // Q_longの積分 (k_start から 250 ns 間)
-        int k_long_end = min(_DT5751Length, k_start + gate_long);
+        // Q_longの積分
         for (int k = k_start; k < k_long_end; ++k) {
             Q_long += (wave[k] / impedance * dt);
         }
