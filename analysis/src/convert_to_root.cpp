@@ -17,8 +17,8 @@ Long64_t count_lines(const std::string& filename) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <input_dat_path> <data_id> <p0_slew> [output_root_path]" << std::endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <input_dat_path> [data_id] [p0_slew] [output_root_path]" << std::endl;
         return 1;
     }
 
@@ -27,18 +27,33 @@ int main(int argc, char** argv) {
     Double_t p0_slew = 0.0;
     std::string output_path;
 
-    try {
-        input_data_id = std::stoi(argv[2]);
-    } catch (const std::exception& e) {
-        std::cerr << "Error: Invalid data_id provided." << std::endl;
-        return 1;
+    // ファイル名から自動で data_id を判定 (例: Co60_tq_02.dat -> 2)
+    size_t pos_tq = input_path.find("_tq_");
+    if (pos_tq != std::string::npos) {
+        try {
+            input_data_id = std::stoi(input_path.substr(pos_tq + 4, 2));
+        } catch (...) {
+            input_data_id = 1;
+        }
     }
 
-    try {
-        p0_slew = std::stod(argv[3]);
-    } catch (const std::exception& e) {
-        std::cerr << "Error: Invalid p0_slew provided." << std::endl;
-        return 1;
+    // 引数が明示的に指定されている場合は上書き
+    if (argc > 2) {
+        try {
+            input_data_id = std::stoi(argv[2]);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: Invalid data_id provided." << std::endl;
+            return 1;
+        }
+    }
+
+    if (argc > 3) {
+        try {
+            p0_slew = std::stod(argv[3]);
+        } catch (const std::exception& e) {
+            std::cerr << "Error: Invalid p0_slew provided." << std::endl;
+            return 1;
+        }
     }
 
     if (argc > 4) {
