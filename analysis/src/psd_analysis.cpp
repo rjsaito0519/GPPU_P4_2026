@@ -54,6 +54,11 @@ int main(int argc, char* argv[]) {
     const double fraction_short = 0.50; // Q_shortの終了点: ピーク高の50%以下まで減衰した位置
     const double fraction_long = 0.10;  // Q_longの終了点: ピーク高の10%以下まで減衰した位置
 
+    // wave2tq互換固定ゲートQ1用のパラメータ
+    const int n_softtrigger_enable_length = 800; // software trigger enable length
+    const int n_length_pre_softtrigger    =  10; // charge window length (pre)
+    const int n_length_post_softtrigger   = 100; // charge window length (post)
+
     Int_t event;
     ULong64_t time_stamp;
     Int_t channel;
@@ -71,6 +76,7 @@ int main(int argc, char* argv[]) {
     Double_t Q_long;
     Double_t Q_short;
     Double_t PSD;
+    Double_t Q1;
     Double_t baseline;
     Double_t peak_time;
 
@@ -78,6 +84,7 @@ int main(int argc, char* argv[]) {
     psd_tree->Branch("time_stamp", &time_stamp, "time_stamp/l");
     psd_tree->Branch("Q_long", &Q_long, "Q_long/D");
     psd_tree->Branch("Q_short", &Q_short, "Q_short/D");
+    psd_tree->Branch("Q1", &Q1, "Q1/D");
     psd_tree->Branch("PSD", &PSD, "PSD/D");
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
@@ -168,6 +175,27 @@ int main(int argc, char* argv[]) {
         // Q_longの積分
         for (int k = k_start; k < k_long_end; ++k) {
             Q_long += (wave[k] / impedance * dt);
+        }
+
+        // 4.1 wave2tq互換の固定窓電荷(Q1)の計算
+        Q1 = 0.0;
+        int k_threshold = -1;
+        for (int k = 0; k < _DT5751Length; ++k) {
+            if (k >= n_softtrigger_enable_length) break;
+            if (wave[k] >= threshold) {
+                k_threshold = k;
+                break;
+            }
+        }
+        if (k_threshold != -1) {
+            int k_window_start = k_threshold - n_length_pre_softtrigger;
+            int k_window_end = k_threshold + n_length_post_softtrigger;
+            if (k_window_start < 0) k_window_start = 0;
+            if (k_window_end > _DT5751Length) k_window_end = _DT5751Length;
+            
+            for (int k = k_window_start; k < k_window_end; ++k) {
+                Q1 += (wave[k] / impedance * dt);
+            }
         }
 
         // 5. PSD パラメータ計算: (Q_long - Q_short) / Q_long
