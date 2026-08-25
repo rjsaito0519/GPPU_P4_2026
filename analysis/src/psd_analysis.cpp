@@ -84,8 +84,8 @@ int main(int argc, char* argv[]) {
 
     Long64_t n_entries = wave_tree->GetEntries();
     cout << "Analyzing waveforms (CH1 only) and calculating PSD..." << endl;
-    cout << " - Short gate: " << gate_short << " ns" << endl;
-    cout << " - Long gate: " << gate_long << " ns" << endl;
+    cout << " - Short gate threshold: " << fraction_short * 100.0 << " % of peak" << endl;
+    cout << " - Long gate threshold: " << fraction_long * 100.0 << " % of peak" << endl;
     cout << " - Target Output: " << output_path << endl;
 
     Long64_t analyzed_count = 0;
