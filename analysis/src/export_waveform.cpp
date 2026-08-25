@@ -26,25 +26,38 @@ int main(int argc, char* argv[]) {
 
     string input_list_filename = argv[1];
     string event_list_txt = "";
+    string target_mode = ""; // "n" や "gamma"
     string output_root_filename = "";
 
     // 引数の賢い判定
     if (argc == 3) {
         string arg2 = argv[2];
-        // 第2引数の拡張子が .txt の場合はイベントリストとして扱う
         if (arg2.size() > 4 && arg2.substr(arg2.size() - 4) == ".txt") {
             event_list_txt = arg2;
+        } else if (arg2 == "n" || arg2 == "gamma" || arg2 == "g" || arg2 == "N" || arg2 == "GAMMA") {
+            target_mode = arg2;
+            if (target_mode == "N") target_mode = "n";
+            if (target_mode == "GAMMA" || target_mode == "g") target_mode = "gamma";
         } else {
             output_root_filename = arg2;
         }
     } else if (argc > 3) {
-        event_list_txt = argv[2];
+        string arg2 = argv[2];
+        if (arg2.size() > 4 && arg2.substr(arg2.size() - 4) == ".txt") {
+            event_list_txt = arg2;
+        } else {
+            target_mode = arg2;
+            if (target_mode == "N") target_mode = "n";
+            if (target_mode == "GAMMA" || target_mode == "g") target_mode = "gamma";
+        }
         output_root_filename = argv[3];
     }
 
     // サフィックスの自動抽出 (例: data/Cf252_tq_merge_n_events.txt -> suffix = "_n")
     string suffix = "";
-    if (!event_list_txt.empty()) {
+    if (!target_mode.empty()) {
+        suffix = "_" + target_mode;
+    } else if (!event_list_txt.empty()) {
         size_t ev_pos = event_list_txt.find("_events.txt");
         if (ev_pos != string::npos) {
             size_t last_under = event_list_txt.find_last_of("_", ev_pos - 1);
@@ -133,10 +146,59 @@ int main(int argc, char* argv[]) {
     tree->Branch("channel", &channel, "channel/I");
     tree->Branch("wave_raw", wave_raw, Form("wave_raw[%d]/s", _DT5751Length));
 
-    // イベントフィルターリストのロード
+    // イベントフィルターリストのロード、またはTQファイルからの自動カット抽出
     set<Int_t> target_events;
     bool use_event_filter = false;
-    if (!event_list_txt.empty()) {
+
+    if (!target_mode.empty()) {
+        // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> data/Cf252_tq_01.root)
+        string tq_root_path = input_list_filename;
+        size_t wave_pos = tq_root_path.find("wave");
+        if (wave_pos != string::npos) {
+            tq_root_path.replace(wave_pos, 4, "tq");
+        }
+        size_t dot_pos = tq_root_path.find_last_of(".");
+        if (dot_pos != string::npos) {
+            tq_root_path = tq_root_path.substr(0, dot_pos);
+        }
+        tq_root_path += ".root";
+
+        TFile* f_tq = TFile::Open(tq_root_path.c_str(), "READ");
+        if (f_tq && !f_tq->IsZombie()) {
+            TTree* t_tq = (TTree*)f_tq->Get("tree"); // convert_to_rootのデフォルトツリーは "tree"
+            if (t_tq) {
+                Int_t ev;
+                Double_t t0, t1;
+                t_tq->SetBranchAddress("event", &ev);
+                t_tq->SetBranchAddress("T0", &t0);
+                t_tq->SetBranchAddress("T1", &t1);
+                
+                Long64_t ents = t_tq->GetEntries();
+                for (Long64_t k = 0; k < ents; ++k) {
+                    t_tq->GetEntry(k);
+                    Double_t diff = t1 - t0;
+                    if (target_mode == "gamma") {
+                        if (diff >= 40.0 && diff < 60.0) {
+                            target_events.insert(ev);
+                        }
+                    } else if (target_mode == "n") {
+                        if (diff >= 60.0 && diff <= 120.0) {
+                            target_events.insert(ev);
+                        }
+                    }
+                }
+                use_event_filter = true;
+                cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
+                     << "' (T1-T0 range) from auto-mapped TQ file: " << tq_root_path << endl;
+            } else {
+                cerr << "WARNING: Cannot find TTree 'tree' in mapped TQ file -> " << tq_root_path << endl;
+            }
+            f_tq->Close();
+            delete f_tq;
+        } else {
+            cerr << "WARNING: Cannot open auto-mapped TQ ROOT file -> " << tq_root_path << ". Decoding all events." << endl;
+        }
+    } else if (!event_list_txt.empty()) {
         ifstream fev(event_list_txt.c_str());
         if (fev) {
             Int_t ev;
