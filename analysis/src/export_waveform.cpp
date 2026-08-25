@@ -105,14 +105,33 @@ int main(int argc, char* argv[]) {
 
         // Open input binary files for this subset
         for (int i = 0; i < _numOfChannels; i++) {
+            ifs[i] = new ifstream();
             string bin_path = list_filename[i][j];
-            // 相対パスの場合はリストファイルのディレクトリパスを結合
-            if (!bin_path.empty() && bin_path[0] != '/' && bin_path.find(":\\") == string::npos && bin_path.find(":/") == string::npos) {
-                bin_path = list_dir + bin_path;
+            
+            // 探索するパス候補のリストを作成
+            vector<string> paths_to_try;
+            paths_to_try.push_back(bin_path); // 1. リスト記載のそのままのパス
+            if (!list_dir.empty()) {
+                paths_to_try.push_back(list_dir + bin_path);             // 2. リストと同じフォルダ
+                paths_to_try.push_back(list_dir + "rawdata/" + bin_path); // 3. リストと同じフォルダの rawdata/ 配下
             }
-            ifs[i] = new ifstream(bin_path.c_str(), ios::binary);
-            if (!ifs[i] || !ifs[i]->is_open()) {
-                cerr << "ERROR: cannot open input binary file -> " << bin_path << endl;
+            
+            bool opened = false;
+            for (const auto& p : paths_to_try) {
+                ifs[i]->open(p.c_str(), ios::binary);
+                if (ifs[i]->is_open()) {
+                    bin_path = p;
+                    opened = true;
+                    break;
+                }
+                ifs[i]->clear(); // エラーステートをクリアして次の試行へ
+            }
+
+            if (!opened) {
+                cerr << "ERROR: cannot open input binary file in any searched locations: " << endl;
+                for (const auto& p : paths_to_try) {
+                    cerr << "  - " << p << endl;
+                }
                 return 1;
             }
         }
