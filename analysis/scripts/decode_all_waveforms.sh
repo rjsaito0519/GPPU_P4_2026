@@ -35,15 +35,39 @@ fi
 tmux kill-session -t decode_wf 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
-# 1. Cf252 データの並列デコード (4並列: 2x2 画面分割)
+# 1. 各ランの基本 TQ 解析および Coincidence 解析 (前処理を並列実行、ログ保存)
 # -----------------------------------------------------------------------------
-echo "--> Launching Cf252 runs (01-04) in a 2x2 tmux window..."
+echo "--> Generating basic TQ and Coincidence files for Cf252 (Parallel, logging to root/log_pre_cf_XX.log)..."
+for run in 01 02 03 04; do
+    (
+        echo "Generating TQ & Coin for Cf252 run ${run}..."
+        (./bin/convert_to_root data/Cf252_tq_${run}.dat ${run} 0.0 root/Cf252_tq_${run}.root && \
+         ./bin/coincidence_analysis root/Cf252_tq_${run}.root root/Cf252_tq_${run}_coincidence.root) 2>&1 | tee root/log_pre_cf_${run}.log
+    ) &
+done
 
-# 各ラン用のデコードコマンドを定義 (前処理は完了しているため export_waveform のみ実行)
-cmd_cf01="./bin/export_waveform data/Cf252_wave_01.dat gamma && ./bin/export_waveform data/Cf252_wave_01.dat fastn && ./bin/export_waveform data/Cf252_wave_01.dat slown; touch root/.done_cf_01"
-cmd_cf02="./bin/export_waveform data/Cf252_wave_02.dat gamma && ./bin/export_waveform data/Cf252_wave_02.dat fastn && ./bin/export_waveform data/Cf252_wave_02.dat slown; touch root/.done_cf_02"
-cmd_cf03="./bin/export_waveform data/Cf252_wave_03.dat gamma && ./bin/export_waveform data/Cf252_wave_03.dat fastn && ./bin/export_waveform data/Cf252_wave_03.dat slown; touch root/.done_cf_03"
-cmd_cf04="./bin/export_waveform data/Cf252_wave_04.dat gamma && ./bin/export_waveform data/Cf252_wave_04.dat fastn && ./bin/export_waveform data/Cf252_wave_04.dat slown; touch root/.done_cf_04"
+echo "--> Generating basic TQ files for Co60 (Parallel, logging to root/log_pre_co_XX.log)..."
+for run in 02 03; do
+    (
+        echo "Generating TQ for Co60 run ${run}..."
+        ./bin/convert_to_root data/Co60_tq_${run}.dat ${run} 0.0 root/Co60_tq_${run}.root 2>&1 | tee root/log_pre_co_${run}.log
+    ) &
+done
+
+# 前処理プロセスの完了を待つ
+wait
+echo "--> Pre-processing completed."
+
+# -----------------------------------------------------------------------------
+# 2. Cf252 データの並列デコード (4並列: 2x2 画面分割、ログ保存)
+# -----------------------------------------------------------------------------
+echo "--> Launching Cf252 runs (01-04) in a 2x2 tmux window (logging to root/log_decode_cf_XX.log)..."
+
+# 各ラン用のデコードコマンドを定義 (tee により画面表示しつつログファイルにも記録)
+cmd_cf01="(./bin/export_waveform data/Cf252_wave_01.dat gamma && ./bin/export_waveform data/Cf252_wave_01.dat fastn && ./bin/export_waveform data/Cf252_wave_01.dat slown) 2>&1 | tee root/log_decode_cf_01.log; touch root/.done_cf_01"
+cmd_cf02="(./bin/export_waveform data/Cf252_wave_02.dat gamma && ./bin/export_waveform data/Cf252_wave_02.dat fastn && ./bin/export_waveform data/Cf252_wave_02.dat slown) 2>&1 | tee root/log_decode_cf_02.log; touch root/.done_cf_02"
+cmd_cf03="(./bin/export_waveform data/Cf252_wave_03.dat gamma && ./bin/export_waveform data/Cf252_wave_03.dat fastn && ./bin/export_waveform data/Cf252_wave_03.dat slown) 2>&1 | tee root/log_decode_cf_03.log; touch root/.done_cf_03"
+cmd_cf04="(./bin/export_waveform data/Cf252_wave_04.dat gamma && ./bin/export_waveform data/Cf252_wave_04.dat fastn && ./bin/export_waveform data/Cf252_wave_04.dat slown) 2>&1 | tee root/log_decode_cf_04.log; touch root/.done_cf_04"
 
 # 新しい tmux セッションをデタッチドモードで開始 (初期ペインで Cf252 run 01 を実行)
 tmux new-session -d -s decode_wf -n "Cf252_Decoding" "${cmd_cf01}"
@@ -73,13 +97,13 @@ sleep 1
     done
     
     # -----------------------------------------------------------------------------
-    # 2. Co60 データの並列デコード (2並列: 左右2画面分割)
+    # 3. Co60 データの並列デコード (2並列: 左右2画面分割、ログ保存)
     # -----------------------------------------------------------------------------
     echo "--> Cf252 runs completed. Starting Co60 runs (02-03) in a new window..."
     
     # Co60 のデコードコマンド
-    cmd_co02="./bin/export_waveform data/Co60_wave_02.dat gamma; touch root/.done_co_02"
-    cmd_co03="./bin/export_waveform data/Co60_wave_03.dat gamma; touch root/.done_co_03"
+    cmd_co02="./bin/export_waveform data/Co60_wave_02.dat gamma 2>&1 | tee root/log_decode_co_02.log; touch root/.done_co_02"
+    cmd_co03="./bin/export_waveform data/Co60_wave_03.dat gamma 2>&1 | tee root/log_decode_co_03.log; touch root/.done_co_03"
 
     # 新しいウィンドウを作成し、左右に分割 (初期ペインで Co60 run 02 を実行)
     tmux new-window -t decode_wf -n "Co60_Decoding" "${cmd_co02}"
@@ -105,7 +129,7 @@ trap - SIGINT SIGTERM EXIT # 正常終了したため、トラップをクリア
 rm -f root/.done_* 2>/dev/null || true
 
 # -----------------------------------------------------------------------------
-# 3. hadd によるマージ処理
+# 4. hadd によるマージ処理
 # -----------------------------------------------------------------------------
 echo "--> Merging ROOT files using hadd..."
 
