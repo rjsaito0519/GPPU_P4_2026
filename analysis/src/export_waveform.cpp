@@ -35,6 +35,12 @@ int main(int argc, char* argv[]) {
         output_root_filename += ".root";
     }
 
+    string list_dir = "";
+    size_t last_slash = input_list_filename.find_last_of("/\\");
+    if (last_slash != string::npos) {
+        list_dir = input_list_filename.substr(0, last_slash + 1); // "data/" など
+    }
+
     ifstream flist(input_list_filename.c_str());
     if (!flist) {
         cerr << "ERROR: cannot open input list file -> " << input_list_filename << endl;
@@ -99,9 +105,14 @@ int main(int argc, char* argv[]) {
 
         // Open input binary files for this subset
         for (int i = 0; i < _numOfChannels; i++) {
-            ifs[i] = new ifstream(list_filename[i][j].c_str(), ios::binary);
+            string bin_path = list_filename[i][j];
+            // 相対パスの場合はリストファイルのディレクトリパスを結合
+            if (!bin_path.empty() && bin_path[0] != '/' && bin_path.find(":\\") == string::npos && bin_path.find(":/") == string::npos) {
+                bin_path = list_dir + bin_path;
+            }
+            ifs[i] = new ifstream(bin_path.c_str(), ios::binary);
             if (!ifs[i] || !ifs[i]->is_open()) {
-                cerr << "ERROR: cannot open input binary file -> " << list_filename[i][j] << endl;
+                cerr << "ERROR: cannot open input binary file -> " << bin_path << endl;
                 return 1;
             }
         }
