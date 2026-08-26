@@ -232,11 +232,18 @@ int main(int argc, char* argv[]) {
         Double_t range_min = k * height_step;
         Double_t range_max = (k == n_ranges - 1) ? (max_height * 5.0) : ((k + 1) * height_step);
 
+        // 入力パスからベース名 (ファイル名のみ) を抽出
+        string file_basename = input_path;
+        size_t last_slash_in = file_basename.find_last_of("/\\");
+        if (last_slash_in != string::npos) {
+            file_basename = file_basename.substr(last_slash_in + 1);
+        }
+
         string title;
         if (k == n_ranges - 1) {
-            title = Form("Superimposed Waveforms (Pulse Height: > %.0f ADC) [CH%d]", range_min, target_ch);
+            title = Form("%s: > %.0f ADC (CH%d)", file_basename.c_str(), range_min, target_ch);
         } else {
-            title = Form("Superimposed Waveforms (Pulse Height: %.0f to %.0f ADC) [CH%d]", range_min, range_max, target_ch);
+            title = Form("%s: %.0f - %.0f ADC (CH%d)", file_basename.c_str(), range_min, (k + 1) * height_step, target_ch);
         }
         if (norm_flag) title += " [Normalized]";
         title += ";Time relative to peak [ns];" + string(norm_flag ? "Normalized Amplitude" : "Pulse Height [ADC]");
@@ -253,8 +260,8 @@ int main(int argc, char* argv[]) {
         if (norm_flag) {
             mg->GetYaxis()->SetRangeUser(-0.1, 1.1);
         } else {
-            // Y軸の最大値制限をバケットの上限に合わせる
-            mg->GetYaxis()->SetRangeUser(-20.0, range_max * 1.2);
+            // Y軸の最大値制限を全ページ一律で max_height (例: 1000) * 1.1 に固定して統一
+            mg->GetYaxis()->SetRangeUser(-20.0, max_height * 1.1);
         }
 
         c->Update();
