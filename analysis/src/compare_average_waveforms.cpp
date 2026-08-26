@@ -445,13 +445,7 @@ int main(int argc, char* argv[]) {
             c->Print(out_pdf.c_str());
             total_pages++;
 
-            delete mg_diff;
-            delete leg_diff;
         }
-
-        if (ge1) delete ge1;
-        if (ge2) delete ge2;
-        if (ge_diff) delete ge_diff;
     }
 
     c->Print(Form("%s)", out_pdf.c_str())); // PDFマルチページ完了
