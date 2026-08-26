@@ -260,8 +260,8 @@ int main(int argc, char* argv[]) {
         if (norm_flag) {
             mg->GetYaxis()->SetRangeUser(-0.1, 1.1);
         } else {
-            // Y軸の最大値制限を全ページ一律で max_height (例: 1000) * 1.1 に固定して統一
-            mg->GetYaxis()->SetRangeUser(-20.0, max_height * 1.1);
+            // Y軸の最大値制限を各ページの波高上限 (range_max) に追従させて見やすくする
+            mg->GetYaxis()->SetRangeUser(-20.0, range_max * 1.2);
         }
 
         c->Update();
