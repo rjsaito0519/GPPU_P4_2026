@@ -13,6 +13,7 @@
 #include <TSystem.h>
 #include <TROOT.h>
 #include <TLegend.h>
+#include "progress_bar.h"
 
 using namespace std;
 
@@ -50,6 +51,15 @@ bool collect_waveforms(const string& filepath, Int_t target_ch, Double_t height_
     wave_tree->SetBranchAddress("time_stamp", &time_stamp);
     wave_tree->SetBranchAddress("wave_raw", wave_raw);
 
+    Double_t delta_T_us_val = -1.0;
+    bool has_delta_T = false;
+    if (wave_tree->GetBranch("delta_T_us")) {
+        wave_tree->SetBranchAddress("delta_T_us", &delta_T_us_val);
+        has_delta_T = true;
+    }
+
+    bool is_slown = (filepath.find("slown") != string::npos);
+
     Int_t n_ranges = (Int_t)ceil(max_height / height_step);
     collector.bucket_waves.resize(n_ranges);
 
@@ -57,7 +67,12 @@ bool collect_waveforms(const string& filepath, Int_t target_ch, Double_t height_
     const Double_t threshold = 5.0;
     const Int_t n_baseline_length = 200;
 
+    cout << "\nScanning file: " << filepath << "..." << endl;
     for (Long64_t i = 0; i < n_entries; ++i) {
+        if (i % 5000 == 0 || i == n_entries - 1) {
+            displayProgressBar(i + 1, n_entries);
+        }
+
         // すべてのバケツが満杯か確認
         bool all_full = true;
         for (Int_t k = 0; k < n_ranges; ++k) {
@@ -72,6 +87,15 @@ bool collect_waveforms(const string& filepath, Int_t target_ch, Double_t height_
 
         if (channel != target_ch) {
             continue;
+        }
+
+        // delta_T_us のカット (slownでは10us未満の即発ガンマ背景をカット)
+        if (has_delta_T) {
+            if (is_slown) {
+                if (delta_T_us_val < 10.0) continue;
+            } else {
+                if (delta_T_us_val < 0.0) continue;
+            }
         }
 
         // 1. ベースライン計算
@@ -190,7 +214,7 @@ int main(int argc, char* argv[]) {
     Int_t target_ch = 1;
     Double_t height_step = 50.0;
     Double_t max_height = 1000.0;
-    Int_t num_to_average = 100; // 平均値算出用のパルス上限数 (多いほどノイズが消えます)
+    Int_t num_to_average = 1000000; // デフォルトで実質上限なし (使える波形は全部使う)
 
     for (Int_t i = 3; i < argc; ++i) {
         string arg = argv[i];
