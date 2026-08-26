@@ -184,6 +184,11 @@ int main(int argc, char* argv[]) {
 
         wave_tree->GetEntry(i);
 
+        // delta_T_us が存在する場合、0.0未満（未相関ノイズイベント）は最初にスキップ
+        if (wave_tree->GetBranch("delta_T_us") && delta_T_us_val < 0.0) {
+            continue;
+        }
+
         // イベントIDが切り替わったら、これまでに集約したデータをFill
         if (event != current_event) {
             fill_current_event();
