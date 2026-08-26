@@ -123,6 +123,8 @@ int main(int argc, char* argv[]) {
     Double_t t_short;
     Double_t t_long;
     Double_t out_delta_T_us = -1.0;
+    Double_t height0 = 0.0;
+    Double_t height1 = 0.0;
 
     psd_tree->Branch("event", &out_event, "event/I");
     psd_tree->Branch("time_stamp", &out_time_stamp, "time_stamp/l");
@@ -138,6 +140,8 @@ int main(int argc, char* argv[]) {
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
     psd_tree->Branch("delta_T_us", &out_delta_T_us, "delta_T_us/D");
+    psd_tree->Branch("height0", &height0, "height0/D");
+    psd_tree->Branch("height1", &height1, "height1/D");
 
     Long64_t n_entries = wave_tree->GetEntries();
     cout << "Analyzing waveforms (Stream processing)..." << endl;
@@ -168,6 +172,8 @@ int main(int argc, char* argv[]) {
         t_short = 0.0; t_long = 0.0;
         baseline = 0.0; peak_time = 0.0;
         out_delta_T_us = -1.0;
+        height0 = 0.0;
+        height1 = 0.0;
         has_ch0 = false;
         has_ch1 = false;
     };
@@ -229,6 +235,13 @@ int main(int argc, char* argv[]) {
                 if (wave_ch0[k] >= threshold) {
                     k_th = k;
                     break;
+                }
+            }
+
+            // CH0の波高(最大振幅)を探索
+            for (Int_t k = 0; k < _DT5751Length; ++k) {
+                if (wave_ch0[k] > height0) {
+                    height0 = wave_ch0[k];
                 }
             }
 
@@ -334,6 +347,7 @@ int main(int argc, char* argv[]) {
             // ピークが有意な場合のみ PSD 計算
             if (k_peak != -1 && max_val >= threshold) {
                 peak_time = (Double_t)k_peak;
+                height1 = max_val;
 
                 Int_t k_start = max(0, k_peak - n_pre_peak);
                 Int_t k_short_end = min(_DT5751Length, k_peak + n_post_peak_short);
