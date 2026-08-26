@@ -32,6 +32,8 @@ int main(int argc, char* argv[]) {
     Int_t n_pre_peak = 10;
     Int_t n_post_peak_short = 10;
     Int_t n_post_peak_long = 30;
+    Bool_t draw_gate_lines = false; // 明示的に引数指定された場合のみゲート破線を描画
+
  
     for (Int_t i = 2; i < argc; ++i) {
         string arg = argv[i];
@@ -43,10 +45,13 @@ int main(int argc, char* argv[]) {
             norm_flag = stoi(argv[++i]);
         } else if (arg == "--pre" && i + 1 < argc) {
             n_pre_peak = stoi(argv[++i]);
+            draw_gate_lines = true;
         } else if (arg == "--short" && i + 1 < argc) {
             n_post_peak_short = stoi(argv[++i]);
+            draw_gate_lines = true;
         } else if (arg == "--long" && i + 1 < argc) {
             n_post_peak_long = stoi(argv[++i]);
+            draw_gate_lines = true;
         }
     }
 
@@ -184,24 +189,26 @@ int main(int argc, char* argv[]) {
         mg->GetYaxis()->SetRangeUser(-0.1, 1.1);
     }
     
-    // 積分ゲート範囲を示す縦線 (TLine) の描画
-    Double_t ymin = norm_flag ? -0.1 : mg->GetYaxis()->GetXmin();
-    Double_t ymax = norm_flag ? 1.1 : mg->GetYaxis()->GetXmax();
+    if (draw_gate_lines) {
+        // 積分ゲート範囲を示す縦線 (TLine) の描画
+        Double_t ymin = norm_flag ? -0.1 : mg->GetYaxis()->GetXmin();
+        Double_t ymax = norm_flag ? 1.1 : mg->GetYaxis()->GetXmax();
 
-    auto draw_gate_line = [](Double_t x_pos, Double_t y_min, Double_t y_max, Int_t color) {
-        TLine* line = new TLine(x_pos, y_min, x_pos, y_max);
-        line->SetLineColor(color);
-        line->SetLineWidth(2);
-        line->SetLineStyle(2); // 破線
-        line->Draw("same");
-    };
+        auto draw_gate_line = [](Double_t x_pos, Double_t y_min, Double_t y_max, Int_t color) {
+            TLine* line = new TLine(x_pos, y_min, x_pos, y_max);
+            line->SetLineColor(color);
+            line->SetLineWidth(2);
+            line->SetLineStyle(2); // 破線
+            line->Draw("same");
+        };
 
-    // 積分開始 (Peak - pre_ns) -> 赤色破線
-    draw_gate_line(-(Double_t)n_pre_peak, ymin, ymax, kRed+1);
-    // Short積分終了 (Peak + short_ns) -> 青色破線
-    draw_gate_line((Double_t)n_post_peak_short, ymin, ymax, kBlue+1);
-    // Long積分終了 (Peak + long_ns) -> 緑色破線
-    draw_gate_line((Double_t)n_post_peak_long, ymin, ymax, kGreen+2);
+        // 積分開始 (Peak - pre_ns) -> 赤色破線
+        draw_gate_line(-(Double_t)n_pre_peak, ymin, ymax, kRed+1);
+        // Short積分終了 (Peak + short_ns) -> 青色破線
+        draw_gate_line((Double_t)n_post_peak_short, ymin, ymax, kBlue+1);
+        // Long積分終了 (Peak + long_ns) -> 緑色破線
+        draw_gate_line((Double_t)n_post_peak_long, ymin, ymax, kGreen+2);
+    }
 
     c->Update();
     
