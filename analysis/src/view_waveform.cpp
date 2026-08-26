@@ -52,6 +52,9 @@ int main(int argc, char* argv[]) {
     map<Int_t, pair<Long64_t, Long64_t>> event_map;
     vector<Int_t> event_ids;
 
+    // インデックス構築中は巨大な生波形データ(wave_raw)のロードをOFFにする (爆速化)
+    tree->SetBranchStatus("wave_raw", 0);
+
     Long64_t n_entries = tree->GetEntries();
     cout << "Scanning TTree and building event index..." << endl;
     for (Long64_t i = 0; i < n_entries; ++i) {
@@ -66,6 +69,9 @@ int main(int argc, char* argv[]) {
             event_map[event].second = i;
         }
     }
+
+    // 描画時用に wave_raw ブランチのロードをONに戻す
+    tree->SetBranchStatus("wave_raw", 1);
 
     // イベントIDをソート
     sort(event_ids.begin(), event_ids.end());
