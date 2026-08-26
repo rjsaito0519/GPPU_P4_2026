@@ -2,7 +2,6 @@
 #include <string>
 #include <vector>
 #include <cmath>
-#include <map>
 #include <algorithm>
 #include <TFile.h>
 #include <TTree.h>
@@ -99,39 +98,14 @@ int main(int argc, char* argv[]) {
     wave_tree->SetBranchAddress("time_stamp", &time_stamp);
     wave_tree->SetBranchAddress("wave_raw", wave_raw);
 
-    // 1. 高速スキャンによりイベントIDマップ (event -> {ch0_entry, ch1_entry}) を構築
-    map<Int_t, pair<Long64_t, Long64_t>> event_map;
-    vector<Int_t> event_ids;
-
-    wave_tree->SetBranchStatus("wave_raw", 0);
-    Long64_t n_entries = wave_tree->GetEntries();
-    cout << "Scanning waveforms and building event index..." << endl;
-    for (Long64_t i = 0; i < n_entries; ++i) {
-        wave_tree->GetEntry(i);
-        if (event_map.find(event) == event_map.end()) {
-            event_map[event] = make_pair(-1LL, -1LL);
-            event_ids.push_back(event);
-        }
-        if (channel == 0) {
-            event_map[event].first = i;
-        } else if (channel == 1) {
-            event_map[event].second = i;
-        }
-    }
-    wave_tree->SetBranchStatus("wave_raw", 1); // 描画・解析用にロードを復帰
-
-    // イベントIDを時系列順にソート
-    sort(event_ids.begin(), event_ids.end());
-
-    Long64_t total_events = event_ids.size();
-    Long64_t n_target = (max_events > 0 && max_events < total_events) ? max_events : total_events;
-
     // 出力ROOTファイルのオープンと出力TTree定義
     TFile* outFile = TFile::Open(output_path.c_str(), "RECREATE");
     TTree* psd_tree = new TTree("tree", "TQ and PSD Composite Tree");
 
-    // 出力変数
-    Double_t T0, Q0;
+    // 出力変数 (グローバルバインド用)
+    Int_t out_event = -1;
+    ULong64_t out_time_stamp = 0;
+    Double_t T0 = 0.0, Q0 = 0.0;
     Double_t T1, Q1;
     Double_t Q_long;
     Double_t Q_short;
@@ -141,8 +115,8 @@ int main(int argc, char* argv[]) {
     Double_t t_short;
     Double_t t_long;
 
-    psd_tree->Branch("event", &event, "event/I");
-    psd_tree->Branch("time_stamp", &time_stamp, "time_stamp/l");
+    psd_tree->Branch("event", &out_event, "event/I");
+    psd_tree->Branch("time_stamp", &out_time_stamp, "time_stamp/l");
     psd_tree->Branch("T0", &T0, "T0/D");
     psd_tree->Branch("Q0", &Q0, "Q0/D");
     psd_tree->Branch("T1", &T1, "T1/D");
@@ -155,37 +129,59 @@ int main(int argc, char* argv[]) {
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
 
-    cout << "Analyzing waveforms and calculating TQ & PSD..." << endl;
+    Long64_t n_entries = wave_tree->GetEntries();
+    cout << "Analyzing waveforms (Stream processing)..." << endl;
     cout << " - Short gate: [Peak - " << n_pre_peak << " ns] to [Peak + " << n_post_peak_short << " ns]" << endl;
     cout << " - Long gate: [Peak - " << n_pre_peak << " ns] to [Peak + " << n_post_peak_long << " ns]" << endl;
     cout << " - Smoothing (Low-pass filter): " << (apply_smoothing ? "ON (1:2:1 Weighted Average)" : "OFF") << endl;
     if (max_events > 0) {
-        cout << " - Max Events Limit: " << n_target << " (Total file events: " << total_events << ")" << endl;
+        cout << " - Max Events Limit: " << max_events << " (Total file entries: " << n_entries << ")" << endl;
     }
     cout << " - Target Output: " << output_path << endl;
 
-    Long64_t analyzed_count = 0;
+    Long64_t analyzed_events = 0;
+    Int_t current_event = -1;
+    bool has_ch0 = false;
+    bool has_ch1 = false;
 
-    for (Long64_t i = 0; i < n_target; ++i) {
-        if (!quiet && (i % 1000 == 0 || i == n_target - 1)) {
-            displayProgressBar(i + 1, n_target);
+    // 前のイベント結果を出力ツリーに詰め込んで状態をリセットするヘルパー関数
+    auto fill_current_event = [&]() {
+        if (current_event != -1 && (has_ch0 || has_ch1)) {
+            out_event = current_event;
+            psd_tree->Fill();
+            analyzed_events++;
         }
-
-        Int_t ev_id = event_ids[i];
-        auto entries = event_map[ev_id];
-
-        // 各変数を初期値（値なし）に初期化
+        // 出力変数のクリア
         T0 = 0.0; Q0 = 0.0;
         T1 = 0.0; Q1 = 0.0;
         Q_long = 0.0; Q_short = 0.0; PSD = 0.0;
         t_short = 0.0; t_long = 0.0;
         baseline = 0.0; peak_time = 0.0;
-        event = ev_id;
+        has_ch0 = false;
+        has_ch1 = false;
+    };
 
-        // --- 1. CH0 (プラスチックトリガー等) の解析 ---
-        if (entries.first != -1) {
-            wave_tree->GetEntry(entries.first);
-            
+    for (Long64_t i = 0; i < n_entries; ++i) {
+        // 最大イベント数に達した場合はループを抜ける
+        if (max_events > 0 && analyzed_events >= max_events) {
+            break;
+        }
+
+        if (!quiet && (i % 5000 == 0 || i == n_entries - 1)) {
+            displayProgressBar(i + 1, n_entries);
+        }
+
+        wave_tree->GetEntry(i);
+
+        // イベントIDが切り替わったら、これまでに集約したデータをFill
+        if (event != current_event) {
+            fill_current_event();
+            current_event = event;
+            out_time_stamp = time_stamp;
+        }
+
+        // --- A. CH0 (プラスチックトリガー等) の解析 ---
+        if (channel == 0) {
             // ベースライン計算
             Double_t sum_wave = 0.0;
             Int_t n_wave = 0;
@@ -240,12 +236,11 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
+            has_ch0 = true;
         }
 
-        // --- 2. CH1 (液体シンチレータ) の解析 ---
-        if (entries.second != -1) {
-            wave_tree->GetEntry(entries.second);
-
+        // --- B. CH1 (液体シンチレータ) の解析 ---
+        else if (channel == 1) {
             // ベースライン計算
             Double_t sum_wave = 0.0;
             Int_t n_wave = 0;
@@ -347,11 +342,12 @@ int main(int argc, char* argv[]) {
                     PSD = (Q_long - Q_short) / Q_long;
                 }
             }
+            has_ch1 = true;
         }
-
-        psd_tree->Fill();
-        analyzed_count++;
     }
+
+    // 最後のイベント結果を掃き出し
+    fill_current_event();
 
     psd_tree->Write();
     outFile->Close();
