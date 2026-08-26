@@ -180,14 +180,29 @@ int main(int argc, char* argv[]) {
             if (dot_pos != string::npos) {
                 basename = basename.substr(0, dot_pos);
             }
-            string filename_coin = basename + "_coincidence.root";
+
+            // 候補ファイル名の作成 (tq や coincidence の挿入パターンの多様性に対応)
+            vector<string> candidate_basenames;
+            candidate_basenames.push_back(basename);
+            if (basename.find("tq") == string::npos) {
+                size_t v_pos = basename.find("_v");
+                if (v_pos != string::npos) {
+                    string inserted = basename;
+                    inserted.insert(v_pos, "_tq");
+                    candidate_basenames.push_back(inserted);
+                }
+                candidate_basenames.push_back(basename + "_tq");
+            }
 
             vector<string> coin_paths_to_try;
-            coin_paths_to_try.push_back("root/" + filename_coin);
-            if (!list_dir.empty()) {
-                coin_paths_to_try.push_back(list_dir + filename_coin);
-                coin_paths_to_try.push_back(list_dir + "../root/" + filename_coin);
-                coin_paths_to_try.push_back(list_dir + "root/" + filename_coin);
+            for (const auto& cb : candidate_basenames) {
+                string filename_coin = cb + "_coincidence.root";
+                coin_paths_to_try.push_back("root/" + filename_coin);
+                if (!list_dir.empty()) {
+                    coin_paths_to_try.push_back(list_dir + filename_coin);
+                    coin_paths_to_try.push_back(list_dir + "../root/" + filename_coin);
+                    coin_paths_to_try.push_back(list_dir + "root/" + filename_coin);
+                }
             }
 
             TFile* f_coin = nullptr;
@@ -249,14 +264,29 @@ int main(int argc, char* argv[]) {
             if (dot_pos != string::npos) {
                 basename = basename.substr(0, dot_pos);
             }
-            string filename_tq = basename + ".root";
+
+            // 候補ファイル名の作成
+            vector<string> candidate_basenames;
+            candidate_basenames.push_back(basename);
+            if (basename.find("tq") == string::npos) {
+                size_t v_pos = basename.find("_v");
+                if (v_pos != string::npos) {
+                    string inserted = basename;
+                    inserted.insert(v_pos, "_tq");
+                    candidate_basenames.push_back(inserted);
+                }
+                candidate_basenames.push_back(basename + "_tq");
+            }
 
             vector<string> tq_paths_to_try;
-            tq_paths_to_try.push_back("root/" + filename_tq);
-            if (!list_dir.empty()) {
-                tq_paths_to_try.push_back(list_dir + filename_tq);
-                tq_paths_to_try.push_back(list_dir + "../root/" + filename_tq);
-                tq_paths_to_try.push_back(list_dir + "root/" + filename_tq);
+            for (const auto& cb : candidate_basenames) {
+                string filename_tq = cb + ".root";
+                tq_paths_to_try.push_back("root/" + filename_tq);
+                if (!list_dir.empty()) {
+                    tq_paths_to_try.push_back(list_dir + filename_tq);
+                    tq_paths_to_try.push_back(list_dir + "../root/" + filename_tq);
+                    tq_paths_to_try.push_back(list_dir + "root/" + filename_tq);
+                }
             }
 
             TFile* f_tq = nullptr;
