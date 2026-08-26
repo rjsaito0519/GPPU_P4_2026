@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
         f_exp->SetParameters(amp_init, 120.0, bg_est);
         f_exp->SetParLimits(0, 0.0, local_max * 2.0); // 振幅に安全制限を設定
         f_exp->SetParLimits(1, 1.0, 700.0);           // 時定数の上限を 700 us に設定
-        f_exp->FixParameter(2, bg_est);               // 背景を固定してフィッティングを極限まで安定化
+        f_exp->SetParLimits(2, 0.0, local_max * 1.5); // 背景の探索範囲に緩やかな制約を設定
 
         // 2段階フィットに L オプション (ポアソン対数尤度フィット) を追加して誤差を安定化
         h->Fit(f_exp, "R Q N L");
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
         latex.SetNDC();
         latex.SetTextSize(0.045);
         latex.SetTextColor(kRed+2);
-        latex.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mus", tau, tau_err));
+        latex.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mu s", tau, tau_err));
         latex.DrawLatex(0.45, 0.68, Form("BG = %.1f #pm %.1f", f_exp->GetParameter(2), f_exp->GetParError(2)));
 
         // グラフ用データに追加 (フィット結果が妥当な場合のみ)
@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
     f_total->SetParameters(total_amp_init, 120.0, bg_total);
     f_total->SetParLimits(0, 0.0, total_max * 2.0);
     f_total->SetParLimits(1, 1.0, 700.0);
-    f_total->FixParameter(2, bg_total); // 背景を固定
+    f_total->SetParLimits(2, 0.0, total_max * 1.5);
 
     // 2段階フィット
     h_total->Fit(f_total, "R Q N L");
@@ -228,7 +228,7 @@ int main(int argc, char** argv) {
     latex_total.SetNDC();
     latex_total.SetTextSize(0.045);
     latex_total.SetTextColor(kRed+2);
-    latex_total.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mus", f_total->GetParameter(1), f_total->GetParError(1)));
+    latex_total.DrawLatex(0.45, 0.75, Form("#tau = %.1f #pm %.1f #mu s", f_total->GetParameter(1), f_total->GetParError(1)));
     latex_total.DrawLatex(0.45, 0.68, Form("BG = %.1f #pm %.1f", f_total->GetParameter(2), f_total->GetParError(2)));
 
     c->Print(pdf_path.c_str());
