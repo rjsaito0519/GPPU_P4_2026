@@ -227,9 +227,39 @@ int main(int argc, char* argv[]) {
 
     Int_t n_ranges = (Int_t)ceil(max_height / height_step);
 
-    // 出力PDFパス決定 (pdf/others/ に自動整理)
-    string out_pdf = "pdf/others/compare_average_" + col1.file_label + "_vs_" + col2.file_label + ".pdf";
-    gSystem->mkdir("pdf/others", true);
+    // 出力PDFの保存先パス自動生成 (file1_pathのフォルダ構造を維持して root を pdf に置換)
+    string out_pdf;
+    string base_name = file1_path;
+    size_t last_dot = base_name.find_last_of(".");
+    if (last_dot != string::npos) {
+        base_name = base_name.substr(0, last_dot);
+    }
+    
+    string suffix = "_vs_" + col2.file_label + ".pdf";
+    size_t data_pos = base_name.find("data");
+    size_t root_pos = base_name.find("root");
+    if (data_pos != string::npos) {
+        base_name.replace(data_pos, 4, "pdf");
+        out_pdf = base_name + suffix;
+    } else if (root_pos != string::npos) {
+        base_name.replace(root_pos, 4, "pdf");
+        out_pdf = base_name + suffix;
+    } else {
+        size_t last_slash = base_name.find_last_of("/\\");
+        if (last_slash != string::npos) {
+            base_name = base_name.substr(last_slash + 1);
+        }
+        out_pdf = "pdf/compare_average_" + base_name + suffix;
+    }
+
+    // 出力先フォルダの作成
+    size_t last_slash_pdf = out_pdf.find_last_of("/\\");
+    if (last_slash_pdf != string::npos) {
+        string pdf_dir = out_pdf.substr(0, last_slash_pdf);
+        gSystem->mkdir(pdf_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("pdf", true);
+    }
 
     TCanvas* c = new TCanvas("c_compare", "Average Waveform Comparison", 900, 700);
     c->SetLeftMargin(0.12);
@@ -280,7 +310,7 @@ int main(int argc, char* argv[]) {
         }
 
         mg->Draw("A");
-        mg->GetXaxis()->SetRangeUser(-20.0, 150.0);
+        mg->GetXaxis()->SetRangeUser(-20.0, 100.0);
         mg->GetYaxis()->SetRangeUser(-20.0, range_max * 1.2); // Y軸のダイナミックレンジ調整
 
         leg->Draw("same");
