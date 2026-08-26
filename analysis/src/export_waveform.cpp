@@ -80,22 +80,36 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // 出力先ROOTファイル名の自動生成 (サフィックスを付与し、root/ フォルダ直下に配置)
+    // 出力先ROOTファイル名の自動生成 (サフィックスを付与し、階層を維持)
     if (output_root_filename.empty()) {
         string base_filename = input_list_filename;
-        size_t last_slash_in = base_filename.find_last_of("/\\");
-        if (last_slash_in != string::npos) {
-            base_filename = base_filename.substr(last_slash_in + 1);
-        }
         size_t last_dot = base_filename.find_last_of(".");
         if (last_dot != string::npos) {
             base_filename = base_filename.substr(0, last_dot);
         }
-        output_root_filename = "root/" + base_filename + suffix + ".root";
+        // "data" を "root" に自動置換して階層を維持
+        size_t data_pos = base_filename.find("data");
+        if (data_pos != string::npos) {
+            base_filename.replace(data_pos, 4, "root");
+            output_root_filename = base_filename + suffix + ".root";
+        } else {
+            // もしパスに "data" が含まれなければ、デフォルトの root/ 直下に配置
+            size_t last_slash_in = base_filename.find_last_of("/\\");
+            if (last_slash_in != string::npos) {
+                base_filename = base_filename.substr(last_slash_in + 1);
+            }
+            output_root_filename = "root/" + base_filename + suffix + ".root";
+        }
     }
 
-    // 出力先フォルダの作成
-    gSystem->mkdir("root", true);
+    // 出力先フォルダの作成 (ディレクトリパスを自動抽出して再帰的作成)
+    size_t last_slash_out = output_root_filename.find_last_of("/\\");
+    if (last_slash_out != string::npos) {
+        string out_dir = output_root_filename.substr(0, last_slash_out);
+        gSystem->mkdir(out_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("root", true);
+    }
 
     string list_dir = "";
     size_t last_slash = input_list_filename.find_last_of("/\\");

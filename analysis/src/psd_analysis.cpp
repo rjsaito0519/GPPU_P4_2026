@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     string input_path = argv[1];
     string output_path = "";
     Int_t n_pre_peak = 10;          // ピーク手前の積分開始オフセット [ns]
-    Int_t n_post_peak_short = 30;   // ピーク後のQ_short積分幅 [ns]
+    Int_t n_post_peak_short = 10;   // ピーク後のQ_short積分幅 [ns]
     Int_t n_post_peak_long = 150;   // ピーク後のQ_long積分幅 [ns]
     Int_t apply_smoothing = 1;      // デジタル平滑化の有効化 (1: On, 0: Off)
     Bool_t quiet = false;           // プログレスバーの非表示フラグ
@@ -51,18 +51,21 @@ int main(int argc, char* argv[]) {
 
     if (output_path.empty()) {
         string base_filename = input_path;
-        size_t last_slash_in = base_filename.find_last_of("/\\");
-        if (last_slash_in != string::npos) {
-            base_filename = base_filename.substr(last_slash_in + 1);
-        }
         size_t last_dot = base_filename.find_last_of(".");
         if (last_dot != string::npos) {
             base_filename = base_filename.substr(0, last_dot);
         }
-        output_path = "root/" + base_filename + "_psd.root";
+        output_path = base_filename + "_psd.root";
     }
 
-    gSystem->mkdir("root", true);
+    // 出力先フォルダの作成
+    size_t last_slash_out = output_path.find_last_of("/\\");
+    if (last_slash_out != string::npos) {
+        string out_dir = output_path.substr(0, last_slash_out);
+        gSystem->mkdir(out_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("root", true);
+    }
 
     TFile* file = TFile::Open(input_path.c_str(), "READ");
     if (!file || file->IsZombie()) {
