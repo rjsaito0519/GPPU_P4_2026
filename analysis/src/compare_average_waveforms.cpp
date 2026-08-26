@@ -204,19 +204,24 @@ TGraphErrors* calculate_average_graph(const vector<vector<Double_t>>& waves, Int
 int main(int argc, char* argv[]) {
     gROOT->SetBatch(kTRUE);
 
-    if (argc < 3) {
-        cerr << "Usage: " << argv[0] << " <file1_root> <file2_root> [--ch channel] [--step height_step] [--max max_height] [--n num_to_average]" << endl;
-        return 1;
-    }
-
-    string file1_path = argv[1];
-    string file2_path = argv[2];
+    string file1_path = "root/Co60_wave_merge_gamma.root";
+    string file2_path = "root/Cf252_wave_merge_slown.root";
     Int_t target_ch = 1;
     Double_t height_step = 50.0;
     Double_t max_height = 1000.0;
     Int_t num_to_average = 1000000; // デフォルトで実質上限なし (使える波形は全部使う)
 
-    for (Int_t i = 3; i < argc; ++i) {
+    Int_t opt_start = 1;
+    if (argc >= 3 && argv[1][0] != '-' && argv[2][0] != '-') {
+        file1_path = argv[1];
+        file2_path = argv[2];
+        opt_start = 3;
+    } else if (argc >= 2 && argv[1][0] != '-') {
+        file1_path = argv[1];
+        opt_start = 2;
+    }
+
+    for (Int_t i = opt_start; i < argc; ++i) {
         string arg = argv[i];
         if (arg == "--ch" && i + 1 < argc) {
             target_ch = stoi(argv[++i]);
