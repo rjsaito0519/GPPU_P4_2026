@@ -166,24 +166,45 @@ int main(int argc, char* argv[]) {
 
     if (!target_mode.empty()) {
         if (target_mode == "fastn" || target_mode == "slown") {
-            // coinファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> root/Cf252_tq_01_coincidence.root)
-            string coin_root_path = input_list_filename;
-            size_t wave_pos = coin_root_path.find("wave");
+            // coinファイルのパスを自動マッピング
+            string basename = input_list_filename;
+            size_t wave_pos = basename.find("wave");
             if (wave_pos != string::npos) {
-                coin_root_path.replace(wave_pos, 4, "tq");
+                basename.replace(wave_pos, 4, "tq");
             }
-            size_t last_slash_bin = coin_root_path.find_last_of("/\\");
+            size_t last_slash_bin = basename.find_last_of("/\\");
             if (last_slash_bin != string::npos) {
-                coin_root_path = coin_root_path.substr(last_slash_bin + 1);
+                basename = basename.substr(last_slash_bin + 1);
             }
-            size_t dot_pos = coin_root_path.find_last_of(".");
+            size_t dot_pos = basename.find_last_of(".");
             if (dot_pos != string::npos) {
-                coin_root_path = coin_root_path.substr(0, dot_pos);
+                basename = basename.substr(0, dot_pos);
             }
-            coin_root_path = "root/" + coin_root_path + "_coincidence.root";
+            string filename_coin = basename + "_coincidence.root";
 
-            TFile* f_coin = TFile::Open(coin_root_path.c_str(), "READ");
-            if (f_coin && !f_coin->IsZombie()) {
+            vector<string> coin_paths_to_try;
+            coin_paths_to_try.push_back("root/" + filename_coin);
+            if (!list_dir.empty()) {
+                coin_paths_to_try.push_back(list_dir + filename_coin);
+                coin_paths_to_try.push_back(list_dir + "../root/" + filename_coin);
+                coin_paths_to_try.push_back(list_dir + "root/" + filename_coin);
+            }
+
+            TFile* f_coin = nullptr;
+            string resolved_coin_path = "";
+            for (const auto& p : coin_paths_to_try) {
+                f_coin = TFile::Open(p.c_str(), "READ");
+                if (f_coin && !f_coin->IsZombie()) {
+                    resolved_coin_path = p;
+                    break;
+                }
+                if (f_coin) {
+                    delete f_coin;
+                    f_coin = nullptr;
+                }
+            }
+
+            if (f_coin) {
                 TTree* t_coin = (TTree*)f_coin->Get("tree");
                 if (t_coin) {
                     Int_t ev;
@@ -197,7 +218,6 @@ int main(int argc, char* argv[]) {
                     Long64_t ents = t_coin->GetEntries();
                     for (Long64_t k = 0; k < ents; ++k) {
                         t_coin->GetEntry(k);
-                        // slown モードの場合、purity 向上のため 500 us 以下の相関イベントのみに制限
                         if (target_mode == "slown" && delta_T_us > 500.0) {
                             continue;
                         }
@@ -205,35 +225,56 @@ int main(int argc, char* argv[]) {
                     }
                     use_event_filter = true;
                     cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
-                         << "' from auto-mapped coincidence file: " << coin_root_path << endl;
+                         << "' from auto-mapped coincidence file: " << resolved_coin_path << endl;
                 } else {
-                    cerr << "WARNING: Cannot find TTree 'coincidence_tree' in mapped file -> " << coin_root_path << endl;
+                    cerr << "WARNING: Cannot find TTree 'tree' in mapped file -> " << resolved_coin_path << endl;
                 }
                 f_coin->Close();
                 delete f_coin;
             } else {
-                cerr << "WARNING: Cannot open auto-mapped coincidence ROOT file -> " << coin_root_path << ". Decoding all events." << endl;
+                cerr << "WARNING: Cannot open auto-mapped coincidence ROOT file in any search locations. Decoding all events." << endl;
             }
         } else {
-            // TQファイルのパスを自動マッピング (例: data/Cf252_wave_01.dat -> root/Cf252_tq_01.root)
-            string tq_root_path = input_list_filename;
-            size_t wave_pos = tq_root_path.find("wave");
+            // TQファイルのパスを自動マッピング
+            string basename = input_list_filename;
+            size_t wave_pos = basename.find("wave");
             if (wave_pos != string::npos) {
-                tq_root_path.replace(wave_pos, 4, "tq");
+                basename.replace(wave_pos, 4, "tq");
             }
-            size_t last_slash_bin = tq_root_path.find_last_of("/\\");
+            size_t last_slash_bin = basename.find_last_of("/\\");
             if (last_slash_bin != string::npos) {
-                tq_root_path = tq_root_path.substr(last_slash_bin + 1);
+                basename = basename.substr(last_slash_bin + 1);
             }
-            size_t dot_pos = tq_root_path.find_last_of(".");
+            size_t dot_pos = basename.find_last_of(".");
             if (dot_pos != string::npos) {
-                tq_root_path = tq_root_path.substr(0, dot_pos);
+                basename = basename.substr(0, dot_pos);
             }
-            tq_root_path = "root/" + tq_root_path + ".root";
+            string filename_tq = basename + ".root";
 
-            TFile* f_tq = TFile::Open(tq_root_path.c_str(), "READ");
-            if (f_tq && !f_tq->IsZombie()) {
-                TTree* t_tq = (TTree*)f_tq->Get("tree"); // convert_to_rootのデフォルトツリーは "tree"
+            vector<string> tq_paths_to_try;
+            tq_paths_to_try.push_back("root/" + filename_tq);
+            if (!list_dir.empty()) {
+                tq_paths_to_try.push_back(list_dir + filename_tq);
+                tq_paths_to_try.push_back(list_dir + "../root/" + filename_tq);
+                tq_paths_to_try.push_back(list_dir + "root/" + filename_tq);
+            }
+
+            TFile* f_tq = nullptr;
+            string resolved_tq_path = "";
+            for (const auto& p : tq_paths_to_try) {
+                f_tq = TFile::Open(p.c_str(), "READ");
+                if (f_tq && !f_tq->IsZombie()) {
+                    resolved_tq_path = p;
+                    break;
+                }
+                if (f_tq) {
+                    delete f_tq;
+                    f_tq = nullptr;
+                }
+            }
+
+            if (f_tq) {
+                TTree* t_tq = (TTree*)f_tq->Get("tree");
                 if (t_tq) {
                     Int_t ev;
                     Double_t t0, t1;
@@ -257,14 +298,14 @@ int main(int argc, char* argv[]) {
                     }
                     use_event_filter = true;
                     cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
-                         << "' (T1-T0 range) from auto-mapped TQ file: " << tq_root_path << endl;
+                         << "' (T1-T0 range) from auto-mapped TQ file: " << resolved_tq_path << endl;
                 } else {
-                    cerr << "WARNING: Cannot find TTree 'tree' in mapped TQ file -> " << tq_root_path << endl;
+                    cerr << "WARNING: Cannot find TTree 'tree' in mapped TQ file -> " << resolved_tq_path << endl;
                 }
                 f_tq->Close();
                 delete f_tq;
             } else {
-                cerr << "WARNING: Cannot open auto-mapped TQ ROOT file -> " << tq_root_path << ". Decoding all events." << endl;
+                cerr << "WARNING: Cannot open auto-mapped TQ ROOT file in any search locations. Decoding all events." << endl;
             }
         }
     } else if (!event_list_txt.empty()) {
