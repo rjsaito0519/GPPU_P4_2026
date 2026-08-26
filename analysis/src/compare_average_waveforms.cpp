@@ -392,10 +392,11 @@ int main(int argc, char* argv[]) {
             ge_diff->SetFillColorAlpha(kBlack, 0.15); // 差分のエラーバンド
             ge_diff->SetFillStyle(1001);
 
-            mg->Add(ge_diff, "3L");
-            leg->AddEntry(ge_diff, "Difference (Cf - Co)", "FL");
         }
 
+        // ------------------------------------
+        // ページ1: 重ね描き比較プロット
+        // ------------------------------------
         mg->Draw("A");
         mg->GetXaxis()->SetRangeUser(-20.0, 100.0);
         mg->GetYaxis()->SetRangeUser(-20.0, range_max * 1.2); // Y軸のダイナミックレンジ調整
@@ -405,6 +406,48 @@ int main(int argc, char* argv[]) {
         c->Update();
         c->Print(out_pdf.c_str());
         total_pages++;
+
+        // ------------------------------------
+        // ページ2: 差分単体プロット (差分データがある場合のみ)
+        // ------------------------------------
+        if (ge_diff) {
+            c->Clear();
+            c->SetGrid();
+
+            TMultiGraph* mg_diff = new TMultiGraph();
+            string diff_title;
+            if (k == n_ranges - 1) {
+                diff_title = Form("Difference (%s - %s) (Height: > %.0f ADC) [CH%d];Time relative to peak [ns];Difference [ADC]", 
+                                  col2.file_label.c_str(), col1.file_label.c_str(), range_min, target_ch);
+            } else {
+                diff_title = Form("Difference (%s - %s) (Height: %.0f - %.0f ADC) [CH%d];Time relative to peak [ns];Difference [ADC]", 
+                                  col2.file_label.c_str(), col1.file_label.c_str(), range_min, range_max, target_ch);
+            }
+            mg_diff->SetTitle(diff_title.c_str());
+            mg_diff->Add(ge_diff, "3L");
+
+            mg_diff->Draw("A");
+            mg_diff->GetXaxis()->SetRangeUser(-20.0, 100.0);
+            
+            // 差分のピーク値に応じたダイナミックオートスケール (つぶれを完全に解消)
+            Double_t y_max_diff = max(10.0, diff_max * 1.25);
+            Double_t y_min_diff = -max(5.0, diff_max * 0.15);
+            mg_diff->GetYaxis()->SetRangeUser(y_min_diff, y_max_diff);
+
+            TLegend* leg_diff = new TLegend(0.15, 0.78, 0.48, 0.86);
+            leg_diff->SetFillStyle(0);
+            leg_diff->SetBorderSize(0);
+            leg_diff->SetTextSize(0.032);
+            leg_diff->AddEntry(ge_diff, "Cf - Co (Diff #pm #sigma)", "FL");
+            leg_diff->Draw("same");
+
+            c->Update();
+            c->Print(out_pdf.c_str());
+            total_pages++;
+
+            delete mg_diff;
+            delete leg_diff;
+        }
 
         if (ge1) delete ge1;
         if (ge2) delete ge2;
