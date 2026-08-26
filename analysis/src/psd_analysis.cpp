@@ -101,6 +101,11 @@ int main(int argc, char* argv[]) {
     wave_tree->SetBranchAddress("time_stamp", &time_stamp);
     wave_tree->SetBranchAddress("wave_raw", wave_raw);
 
+    Double_t delta_T_us_val = -1.0;
+    if (wave_tree->GetBranch("delta_T_us")) {
+        wave_tree->SetBranchAddress("delta_T_us", &delta_T_us_val);
+    }
+
     // 出力ROOTファイルのオープンと出力TTree定義
     TFile* outFile = TFile::Open(output_path.c_str(), "RECREATE");
     TTree* psd_tree = new TTree("tree", "TQ and PSD Composite Tree");
@@ -117,6 +122,7 @@ int main(int argc, char* argv[]) {
     Double_t peak_time;
     Double_t t_short;
     Double_t t_long;
+    Double_t out_delta_T_us = -1.0;
 
     psd_tree->Branch("event", &out_event, "event/I");
     psd_tree->Branch("time_stamp", &out_time_stamp, "time_stamp/l");
@@ -131,6 +137,7 @@ int main(int argc, char* argv[]) {
     psd_tree->Branch("PSD", &PSD, "PSD/D");
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
+    psd_tree->Branch("delta_T_us", &out_delta_T_us, "delta_T_us/D");
 
     Long64_t n_entries = wave_tree->GetEntries();
     cout << "Analyzing waveforms (Stream processing)..." << endl;
@@ -160,6 +167,7 @@ int main(int argc, char* argv[]) {
         Q_long = 0.0; Q_short = 0.0; PSD = 0.0;
         t_short = 0.0; t_long = 0.0;
         baseline = 0.0; peak_time = 0.0;
+        out_delta_T_us = -1.0;
         has_ch0 = false;
         has_ch1 = false;
     };
@@ -181,6 +189,7 @@ int main(int argc, char* argv[]) {
             fill_current_event();
             current_event = event;
             out_time_stamp = time_stamp;
+            out_delta_T_us = delta_T_us_val;
         }
 
         // --- A. CH0 (プラスチックトリガー等) の解析 ---

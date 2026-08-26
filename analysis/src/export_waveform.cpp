@@ -174,8 +174,12 @@ int main(int argc, char* argv[]) {
     tree->Branch("channel", &channel, "channel/I");
     tree->Branch("wave_raw", wave_raw, Form("wave_raw[%d]/s", _DT5751Length));
 
+    Double_t out_delta_T_us = -1.0;
+    tree->Branch("delta_T_us", &out_delta_T_us, "delta_T_us/D");
+
     // イベントフィルターリストのロード、またはTQファイルからの自動カット抽出
     set<Int_t> target_events;
+    map<Int_t, Double_t> event_delta_T_map;
     bool use_event_filter = false;
 
     if (!target_mode.empty()) {
@@ -251,6 +255,11 @@ int main(int argc, char* argv[]) {
                             continue;
                         }
                         target_events.insert(ev);
+                        if (target_mode == "slown") {
+                            event_delta_T_map[ev] = delta_T_us;
+                        } else {
+                            event_delta_T_map[ev] = 0.0;
+                        }
                     }
                     use_event_filter = true;
                     cout << "Loaded " << target_events.size() << " target events for mode '" << target_mode 
@@ -442,6 +451,15 @@ int main(int argc, char* argv[]) {
                 // ターゲットリストに入っていないイベントはスキップ
                 if (use_event_filter && target_events.find(event) == target_events.end()) {
                     continue;
+                }
+
+                // delta_T_us の設定
+                out_delta_T_us = -1.0;
+                if (use_event_filter) {
+                    auto it = event_delta_T_map.find(event);
+                    if (it != event_delta_T_map.end()) {
+                        out_delta_T_us = it->second;
+                    }
                 }
 
                 // TTreeへの格納
