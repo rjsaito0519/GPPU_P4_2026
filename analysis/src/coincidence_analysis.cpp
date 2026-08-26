@@ -35,18 +35,21 @@ int main(int argc, char** argv) {
         output_path = argv[2];
     } else {
         std::string base_filename = input_path;
-        size_t last_slash_in = base_filename.find_last_of("/\\");
-        if (last_slash_in != std::string::npos) {
-            base_filename = base_filename.substr(last_slash_in + 1);
-        }
         size_t last_dot = base_filename.find_last_of(".");
         if (last_dot != std::string::npos) {
             base_filename = base_filename.substr(0, last_dot);
         }
-        output_path = "root/" + base_filename + "_coincidence.root";
+        output_path = base_filename + "_coincidence.root";
     }
 
-    gSystem->mkdir("root", true);
+    // 出力先フォルダの作成 (再帰的)
+    size_t last_slash_out = output_path.find_last_of("/\\");
+    if (last_slash_out != std::string::npos) {
+        std::string out_dir = output_path.substr(0, last_slash_out);
+        gSystem->mkdir(out_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("root", true);
+    }
 
     TFile* fin = TFile::Open(input_path.c_str(), "READ");
     if (!fin || fin->IsZombie()) {
@@ -84,15 +87,38 @@ int main(int argc, char** argv) {
     // -------------------------------------------------------------
     // 全イベントに対する T1 - T0 のトリガー選別窓プロット (統計十分な全体分布)
     // -------------------------------------------------------------
-    std::string pdf_dir = "pdf";
-    gSystem->mkdir(pdf_dir.c_str(), true);
-    size_t last_slash = input_path.find_last_of("/\\");
-    std::string base_name = (last_slash == std::string::npos) ? input_path : input_path.substr(last_slash + 1);
+    // pdfの保存先パス自動生成 (data または root を pdf に自動置換して階層維持)
+    std::string trigger_pdf_path;
+    std::string base_name = input_path;
     size_t last_dot_base = base_name.find_last_of(".");
     if (last_dot_base != std::string::npos) {
         base_name = base_name.substr(0, last_dot_base);
     }
-    std::string trigger_pdf_path = pdf_dir + "/" + base_name + "_coincidence_trigger.pdf";
+    
+    size_t data_pos = base_name.find("data");
+    size_t root_pos = base_name.find("root");
+    if (data_pos != std::string::npos) {
+        base_name.replace(data_pos, 4, "pdf");
+        trigger_pdf_path = base_name + "_coincidence_trigger.pdf";
+    } else if (root_pos != std::string::npos) {
+        base_name.replace(root_pos, 4, "pdf");
+        trigger_pdf_path = base_name + "_coincidence_trigger.pdf";
+    } else {
+        size_t last_slash = base_name.find_last_of("/\\");
+        if (last_slash != std::string::npos) {
+            base_name = base_name.substr(last_slash + 1);
+        }
+        trigger_pdf_path = "pdf/" + base_name + "_coincidence_trigger.pdf";
+    }
+
+    // PDF出力先フォルダの作成
+    size_t last_slash_pdf = trigger_pdf_path.find_last_of("/\\");
+    if (last_slash_pdf != std::string::npos) {
+        std::string pdf_dir = trigger_pdf_path.substr(0, last_slash_pdf);
+        gSystem->mkdir(pdf_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("pdf", true);
+    }
 
     std::cout << "Generating trigger window plot (All events)..." << std::endl;
     TCanvas* c_trig = new TCanvas("c_trig", "Trigger Window", 800, 600);
