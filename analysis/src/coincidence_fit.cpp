@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         
         // 0 ~ 800 us の範囲で 100 ビン (1bin = 8.0 us)
         std::string hist_name = Form("h_q1_%d_%d", (int)q_min, (int)q_max);
-        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mus];Entries", (int)q_min, (int)q_max), 100, 0, 800);
+        TH1D* h = new TH1D(hist_name.c_str(), Form("slow_Q1: %d to %d;#Delta t [#mu s];Entries", (int)q_min, (int)q_max), 100, 0, 800);
         h->SetLineColor(kBlack);
         h->SetLineWidth(2);
 
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
     c->Clear();
     c->SetRightMargin(0.10); // 余白をデフォルトに戻す
 
-    TH1D* h_total = new TH1D("h_total", "Total Coincidence Decay Fit (slow_Q1: 0 to 50);#Delta t [#mus];Entries", 100, 0, 800);
+    TH1D* h_total = new TH1D("h_total", "Total Coincidence Decay Fit (slow_Q1: 0 to 50);#Delta t [#mu s];Entries", 100, 0, 800);
     h_total->SetLineColor(kBlack);
     h_total->SetLineWidth(2);
 
@@ -241,7 +241,7 @@ int main(int argc, char** argv) {
 
     if (!vec_q1.empty()) {
         TGraphErrors* gr = new TGraphErrors(vec_q1.size(), &vec_q1[0], &vec_tau[0], &vec_q1_err[0], &vec_tau_err[0]);
-        gr->SetTitle("Decay Constant #tau vs slow_Q1;slow_Q1;Decay Constant #tau [#mus]");
+        gr->SetTitle("Decay Constant #tau vs slow_Q1;slow_Q1;Decay Constant #tau [#mu s]");
         gr->SetMarkerStyle(20);
         gr->SetMarkerSize(1.5);
         gr->SetMarkerColor(kBlue);
