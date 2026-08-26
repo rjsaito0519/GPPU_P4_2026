@@ -229,20 +229,36 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // ファイルラベルの自動抽出
-    auto get_basename = [](const string& path) {
+    // ファイルラベルの自動抽出と明示的な差し替え
+    auto get_display_label = [](const string& path) {
         size_t slash = path.find_last_of("/\\");
         string base = (slash == string::npos) ? path : path.substr(slash + 1);
         size_t dot = base.find_last_of(".");
-        return (dot == string::npos) ? base : base.substr(0, dot);
+        if (dot != string::npos) {
+            base = base.substr(0, dot);
+        }
+        
+        if (base.find("Co60") != string::npos || base.find("Co_60") != string::npos) {
+            return "Co-60 gamma";
+        } else if (base.find("Cf252") != string::npos) {
+            if (base.find("slown") != string::npos) {
+                return "Cf-252 slown";
+            } else if (base.find("fastn") != string::npos) {
+                return "Cf-252 fastn";
+            } else if (base.find("gamma") != string::npos) {
+                return "Cf-252 gamma";
+            }
+            return "Cf-252";
+        }
+        return base;
     };
 
     WaveformCollector col1;
-    col1.file_label = get_basename(file1_path);
+    col1.file_label = get_display_label(file1_path);
     col1.color = kBlue; // ファイル1 (Gamma) -> 青色
 
     WaveformCollector col2;
-    col2.file_label = get_basename(file2_path);
+    col2.file_label = get_display_label(file2_path);
     col2.color = kRed;  // ファイル2 (Slow Neutron) -> 赤色
 
     // 波形収集の実行
@@ -252,6 +268,13 @@ int main(int argc, char* argv[]) {
     Int_t n_ranges = (Int_t)ceil(max_height / height_step);
 
     // 出力PDFの保存先パス自動生成 (file1_pathのフォルダ構造を維持して root を pdf に置換)
+    auto get_basename = [](const string& path) {
+        size_t slash = path.find_last_of("/\\");
+        string base = (slash == string::npos) ? path : path.substr(slash + 1);
+        size_t dot = base.find_last_of(".");
+        return (dot == string::npos) ? base : base.substr(0, dot);
+    };
+
     string out_pdf;
     string base_name = file1_path;
     size_t last_dot = base_name.find_last_of(".");
@@ -259,7 +282,7 @@ int main(int argc, char* argv[]) {
         base_name = base_name.substr(0, last_dot);
     }
     
-    string suffix = "_vs_" + col2.file_label + ".pdf";
+    string suffix = "_vs_" + get_basename(file2_path) + ".pdf";
     size_t data_pos = base_name.find("data");
     size_t root_pos = base_name.find("root");
     if (data_pos != string::npos) {
@@ -303,7 +326,8 @@ int main(int argc, char* argv[]) {
         c->SetGrid();
 
         TMultiGraph* mg = new TMultiGraph();
-        TLegend* leg = new TLegend(0.55, 0.75, 0.88, 0.88);
+        // 凡例を左上のデッドスペース（立ち上がり前）に配置し、枠内に綺麗に収める
+        TLegend* leg = new TLegend(0.15, 0.72, 0.48, 0.86);
         leg->SetFillStyle(0);
         leg->SetBorderSize(0);
         leg->SetTextSize(0.032);
