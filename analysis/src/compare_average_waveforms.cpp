@@ -364,6 +364,7 @@ int main(int argc, char* argv[]) {
 
         // 差分波形 (col2 - col1 = Cf - Co) の計算
         TGraphErrors* ge_diff = nullptr;
+        Double_t diff_max = 0.0;
         if (ge1 && ge2) {
             Double_t* x1 = ge1->GetX();
             Double_t* y1 = ge1->GetY();
@@ -376,7 +377,6 @@ int main(int argc, char* argv[]) {
             vector<Double_t> ex_diff(_DT5751Length, 0.0);
             vector<Double_t> ey_diff(_DT5751Length);
 
-            Double_t diff_max = 0.0;
             for (Int_t idx = 0; idx < _DT5751Length; ++idx) {
                 x_diff[idx] = x1[idx];
                 y_diff[idx] = y2[idx] - y1[idx]; // Cf - Co の差分
