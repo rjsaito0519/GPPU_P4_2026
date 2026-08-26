@@ -362,6 +362,36 @@ int main(int argc, char* argv[]) {
             leg->AddEntry(ge2, Form("%s (N=%d)", col2.file_label.c_str(), (int)col2.bucket_waves[k].size()), "FL");
         }
 
+        // 差分波形 (col2 - col1 = Cf - Co) の計算＆追加
+        TGraphErrors* ge_diff = nullptr;
+        if (ge1 && ge2) {
+            Double_t* x1 = ge1->GetX();
+            Double_t* y1 = ge1->GetY();
+            Double_t* ey1 = ge1->GetEY();
+            Double_t* y2 = ge2->GetY();
+            Double_t* ey2 = ge2->GetEY();
+
+            vector<Double_t> x_diff(_DT5751Length);
+            vector<Double_t> y_diff(_DT5751Length);
+            vector<Double_t> ex_diff(_DT5751Length, 0.0);
+            vector<Double_t> ey_diff(_DT5751Length);
+
+            for (Int_t idx = 0; idx < _DT5751Length; ++idx) {
+                x_diff[idx] = x1[idx];
+                y_diff[idx] = y2[idx] - y1[idx]; // Cf - Co の差分
+                ey_diff[idx] = sqrt(pow(ey1[idx], 2) + pow(ey2[idx], 2)); // 誤差伝播
+            }
+
+            ge_diff = new TGraphErrors(_DT5751Length, &x_diff[0], &y_diff[0], &ex_diff[0], &ey_diff[0]);
+            ge_diff->SetLineColor(kBlack); // 差分は黒色太線
+            ge_diff->SetLineWidth(3);
+            ge_diff->SetFillColorAlpha(kBlack, 0.15); // 差分のエラーバンド
+            ge_diff->SetFillStyle(1001);
+
+            mg->Add(ge_diff, "3L");
+            leg->AddEntry(ge_diff, "Difference (Cf - Co)", "FL");
+        }
+
         mg->Draw("A");
         mg->GetXaxis()->SetRangeUser(-20.0, 100.0);
         mg->GetYaxis()->SetRangeUser(-20.0, range_max * 1.2); // Y軸のダイナミックレンジ調整
@@ -374,6 +404,7 @@ int main(int argc, char* argv[]) {
 
         if (ge1) delete ge1;
         if (ge2) delete ge2;
+        if (ge_diff) delete ge_diff;
     }
 
     c->Print(Form("%s)", out_pdf.c_str())); // PDFマルチページ完了
