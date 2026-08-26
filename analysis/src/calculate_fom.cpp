@@ -156,17 +156,39 @@ int main(int argc, char* argv[]) {
     c->Update();
 
     // 出力PDFフォルダの作成と保存
+    // 出力PDFの保存先パス自動生成 (data または root を pdf に自動置換して階層維持)
+    string out_pdf;
     string base_name = input_path;
-    size_t last_slash = base_name.find_last_of("/\\");
-    if (last_slash != string::npos) {
-        base_name = base_name.substr(last_slash + 1);
-    }
     size_t last_dot = base_name.find_last_of(".");
     if (last_dot != string::npos) {
         base_name = base_name.substr(0, last_dot);
     }
-    string out_pdf = "pdf/" + base_name + "_fom_fit.pdf";
-    gSystem->mkdir("pdf", true);
+    
+    size_t data_pos = base_name.find("data");
+    size_t root_pos = base_name.find("root");
+    if (data_pos != string::npos) {
+        base_name.replace(data_pos, 4, "pdf");
+        out_pdf = base_name + "_fom_fit.pdf";
+    } else if (root_pos != string::npos) {
+        base_name.replace(root_pos, 4, "pdf");
+        out_pdf = base_name + "_fom_fit.pdf";
+    } else {
+        size_t last_slash = base_name.find_last_of("/\\");
+        if (last_slash != string::npos) {
+            base_name = base_name.substr(last_slash + 1);
+        }
+        out_pdf = "pdf/" + base_name + "_fom_fit.pdf";
+    }
+
+    // 出力先フォルダの作成
+    size_t last_slash_pdf = out_pdf.find_last_of("/\\");
+    if (last_slash_pdf != string::npos) {
+        string pdf_dir = out_pdf.substr(0, last_slash_pdf);
+        gSystem->mkdir(pdf_dir.c_str(), true);
+    } else {
+        gSystem->mkdir("pdf", true);
+    }
+
     c->Print(out_pdf.c_str());
     cout << "Saved fit plot to: " << out_pdf << endl;
 
