@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <map>
 #include <algorithm>
 #include <TFile.h>
 #include <TTree.h>
@@ -21,8 +22,8 @@ int main(int argc, char* argv[]) {
     string input_path = argv[1];
     string output_path = "";
     Int_t n_pre_peak = 10;          // ピーク手前の積分開始オフセット [ns]
-    Int_t n_post_peak_short = 10;   // ピーク後のQ_short積分幅 [ns]
-    Int_t n_post_peak_long = 30;    // ピーク後のQ_long積分幅 [ns]
+    Int_t n_post_peak_short = 30;   // ピーク後のQ_short積分幅 [ns]
+    Int_t n_post_peak_long = 150;   // ピーク後のQ_long積分幅 [ns]
     Int_t apply_smoothing = 1;      // デジタル平滑化の有効化 (1: On, 0: Off)
     Bool_t quiet = false;           // プログレスバーの非表示フラグ
     Long64_t max_events = -1;       // 最大解析イベント数 (-1: 全件)
@@ -72,7 +73,7 @@ int main(int argc, char* argv[]) {
 
     TTree* wave_tree = (TTree*)file->Get("tree");
     if (!wave_tree) {
-        cerr << "ERROR: cannot find TTree 'wave_tree' in input file" << endl;
+        cerr << "ERROR: cannot find TTree 'tree' in input file" << endl;
         file->Close();
         return 1;
     }
@@ -83,7 +84,7 @@ int main(int argc, char* argv[]) {
     const Double_t impedance = 50.0; // ohm
     const Double_t dt = 1.0; // ns
 
-    // wave2tq互換固定ゲートQ1用のパラメータ
+    // wave2tq互換固定ゲートQ用のパラメータ
     const Int_t n_softtrigger_enable_length = 800; // software trigger enable length
     const Int_t n_length_pre_softtrigger    =  10; // charge window length (pre)
     const Int_t n_length_post_softtrigger   = 100; // charge window length (post)
@@ -98,39 +99,68 @@ int main(int argc, char* argv[]) {
     wave_tree->SetBranchAddress("time_stamp", &time_stamp);
     wave_tree->SetBranchAddress("wave_raw", wave_raw);
 
-    // 出力ROOTファイルのオープン
-    TFile* outFile = TFile::Open(output_path.c_str(), "RECREATE");
-    TTree* psd_tree = new TTree("tree", "PSD Analysis Tree (CH1 only)");
+    // 1. 高速スキャンによりイベントIDマップ (event -> {ch0_entry, ch1_entry}) を構築
+    map<Int_t, pair<Long64_t, Long64_t>> event_map;
+    vector<Int_t> event_ids;
 
+    wave_tree->SetBranchStatus("wave_raw", 0);
+    Long64_t n_entries = wave_tree->GetEntries();
+    cout << "Scanning waveforms and building event index..." << endl;
+    for (Long64_t i = 0; i < n_entries; ++i) {
+        wave_tree->GetEntry(i);
+        if (event_map.find(event) == event_map.end()) {
+            event_map[event] = make_pair(-1LL, -1LL);
+            event_ids.push_back(event);
+        }
+        if (channel == 0) {
+            event_map[event].first = i;
+        } else if (channel == 1) {
+            event_map[event].second = i;
+        }
+    }
+    wave_tree->SetBranchStatus("wave_raw", 1); // 描画・解析用にロードを復帰
+
+    // イベントIDを時系列順にソート
+    sort(event_ids.begin(), event_ids.end());
+
+    Long64_t total_events = event_ids.size();
+    Long64_t n_target = (max_events > 0 && max_events < total_events) ? max_events : total_events;
+
+    // 出力ROOTファイルのオープンと出力TTree定義
+    TFile* outFile = TFile::Open(output_path.c_str(), "RECREATE");
+    TTree* psd_tree = new TTree("tree", "TQ and PSD Composite Tree");
+
+    // 出力変数
+    Double_t T0, Q0;
+    Double_t T1, Q1;
     Double_t Q_long;
     Double_t Q_short;
     Double_t PSD;
-    Double_t Q1;
     Double_t baseline;
     Double_t peak_time;
-    Double_t t_short; // ピークからQ_short判定点までの時間差 (ns)
-    Double_t t_long;  // ピークからQ_long判定点までの時間差 (ns)
+    Double_t t_short;
+    Double_t t_long;
 
     psd_tree->Branch("event", &event, "event/I");
     psd_tree->Branch("time_stamp", &time_stamp, "time_stamp/l");
+    psd_tree->Branch("T0", &T0, "T0/D");
+    psd_tree->Branch("Q0", &Q0, "Q0/D");
+    psd_tree->Branch("T1", &T1, "T1/D");
+    psd_tree->Branch("Q1", &Q1, "Q1/D");
     psd_tree->Branch("Q_long", &Q_long, "Q_long/D");
     psd_tree->Branch("Q_short", &Q_short, "Q_short/D");
-    psd_tree->Branch("Q1", &Q1, "Q1/D");
     psd_tree->Branch("t_short", &t_short, "t_short/D");
     psd_tree->Branch("t_long", &t_long, "t_long/D");
     psd_tree->Branch("PSD", &PSD, "PSD/D");
     psd_tree->Branch("baseline", &baseline, "baseline/D");
     psd_tree->Branch("peak_time", &peak_time, "peak_time/D");
 
-    Long64_t n_entries = wave_tree->GetEntries();
-    Long64_t n_target = (max_events > 0 && max_events < n_entries) ? max_events : n_entries;
-
-    cout << "Analyzing waveforms (CH1 only) and calculating PSD..." << endl;
+    cout << "Analyzing waveforms and calculating TQ & PSD..." << endl;
     cout << " - Short gate: [Peak - " << n_pre_peak << " ns] to [Peak + " << n_post_peak_short << " ns]" << endl;
     cout << " - Long gate: [Peak - " << n_pre_peak << " ns] to [Peak + " << n_post_peak_long << " ns]" << endl;
     cout << " - Smoothing (Low-pass filter): " << (apply_smoothing ? "ON (1:2:1 Weighted Average)" : "OFF") << endl;
     if (max_events > 0) {
-        cout << " - Max Events Limit: " << n_target << " (Total file entries: " << n_entries << ")" << endl;
+        cout << " - Max Events Limit: " << n_target << " (Total file events: " << total_events << ")" << endl;
     }
     cout << " - Target Output: " << output_path << endl;
 
@@ -140,117 +170,183 @@ int main(int argc, char* argv[]) {
         if (!quiet && (i % 1000 == 0 || i == n_target - 1)) {
             displayProgressBar(i + 1, n_target);
         }
-        wave_tree->GetEntry(i);
 
-        // 制限条件: CH1のみ解析 (CH0や他のCHはスキップ)
-        if (channel != 1) {
-            continue;
-        }
+        Int_t ev_id = event_ids[i];
+        auto entries = event_map[ev_id];
 
-        // 1. ベースライン計算 (wave2tq.ccのロジック)
-        Double_t sum_wave = 0.0;
-        Int_t n_wave = 0;
-        for (Int_t k = 0; k < n_baseline_length; ++k) {
-            sum_wave += (Double_t)wave_raw[k];
-            n_wave++;
-        }
-        Double_t baseline_rough = sum_wave / Double_t(n_wave);
+        // 各変数を初期値（値なし）に初期化
+        T0 = 0.0; Q0 = 0.0;
+        T1 = 0.0; Q1 = 0.0;
+        Q_long = 0.0; Q_short = 0.0; PSD = 0.0;
+        t_short = 0.0; t_long = 0.0;
+        baseline = 0.0; peak_time = 0.0;
+        event = ev_id;
 
-        sum_wave = 0.0;
-        n_wave = 0;
-        for (Int_t k = 0; k < n_baseline_length; ++k) {
-            if (abs((Double_t)wave_raw[k] - baseline_rough) < threshold) {
+        // --- 1. CH0 (プラスチックトリガー等) の解析 ---
+        if (entries.first != -1) {
+            wave_tree->GetEntry(entries.first);
+            
+            // ベースライン計算
+            Double_t sum_wave = 0.0;
+            Int_t n_wave = 0;
+            for (Int_t k = 0; k < n_baseline_length; ++k) {
                 sum_wave += (Double_t)wave_raw[k];
                 n_wave++;
             }
-        }
-        baseline = (n_wave > 0) ? (sum_wave / Double_t(n_wave)) : baseline_rough;
+            Double_t baseline_rough = sum_wave / Double_t(n_wave);
 
-        // 2. ベースライン差分（極性反転）波形の作成
-        vector<Double_t> wave(_DT5751Length);
-        for (Int_t k = 0; k < _DT5751Length; ++k) {
-            wave[k] = baseline - (Double_t)wave_raw[k];
-        }
+            sum_wave = 0.0; n_wave = 0;
+            for (Int_t k = 0; k < n_baseline_length; ++k) {
+                if (abs((Double_t)wave_raw[k] - baseline_rough) < threshold) {
+                    sum_wave += (Double_t)wave_raw[k];
+                    n_wave++;
+                }
+            }
+            Double_t bl_ch0 = (n_wave > 0) ? (sum_wave / Double_t(n_wave)) : baseline_rough;
 
-        // 3点移動平均による平滑化（ローパスフィルタ）
-        if (apply_smoothing) {
-            vector<Double_t> temp_wave = wave;
-            for (Int_t k = 1; k < _DT5751Length - 1; ++k) {
-                wave[k] = (temp_wave[k - 1] + 2.0 * temp_wave[k] + temp_wave[k + 1]) / 4.0;
+            // 反転ベースライン減算波形
+            vector<Double_t> wave_ch0(_DT5751Length);
+            for (Int_t k = 0; k < _DT5751Length; ++k) {
+                wave_ch0[k] = bl_ch0 - (Double_t)wave_raw[k];
+            }
+
+            // しきい値を超えたタイミング探索
+            Int_t k_th = -1;
+            for (Int_t k = 0; k < n_softtrigger_enable_length; ++k) {
+                if (wave_ch0[k] >= threshold) {
+                    k_th = k;
+                    break;
+                }
+            }
+
+            if (k_th != -1) {
+                // 固定ゲート積算 Q0 の計算
+                Int_t k_w_start = max(0, k_th - n_length_pre_softtrigger);
+                Int_t k_w_end = min(_DT5751Length, k_th + n_length_post_softtrigger);
+                for (Int_t k = k_w_start; k < k_w_end; ++k) {
+                    Q0 += (wave_ch0[k] / impedance * dt);
+                }
+
+                // 線形補間 T0 の計算
+                if (k_th > 0) {
+                    Double_t time_1 = (Double_t)(k_th - 1);
+                    Double_t time_2 = (Double_t)k_th;
+                    Double_t wave_1 = wave_ch0[k_th - 1];
+                    Double_t wave_2 = wave_ch0[k_th];
+                    Double_t slope = (wave_1 - wave_2) / (time_1 - time_2);
+                    Double_t offset = (time_1 * wave_2 - time_2 * wave_1) / (time_1 - time_2);
+                    if (slope != 0.0) {
+                        T0 = (threshold - offset) / slope;
+                    }
+                }
             }
         }
 
-        // 3. ピーク位置の探索 (400ns近辺 = 300 ~ 500 ns の範囲)
-        Double_t max_val = -99999.0;
-        Int_t k_peak = -1;
-        for (Int_t k = 300; k < 500; ++k) {
-            if (wave[k] > max_val) {
-                max_val = wave[k];
-                k_peak = k;
+        // --- 2. CH1 (液体シンチレータ) の解析 ---
+        if (entries.second != -1) {
+            wave_tree->GetEntry(entries.second);
+
+            // ベースライン計算
+            Double_t sum_wave = 0.0;
+            Int_t n_wave = 0;
+            for (Int_t k = 0; k < n_baseline_length; ++k) {
+                sum_wave += (Double_t)wave_raw[k];
+                n_wave++;
             }
-        }
+            Double_t baseline_rough = sum_wave / Double_t(n_wave);
 
-        // 有意なパルスピークがない（ノイズ閾値以下）場合は解析対象外としてスキップ
-        if (k_peak == -1 || max_val < threshold) {
-            continue;
-        }
-
-        peak_time = (Double_t)k_peak;
-
-        // 4. 積算電荷（Q_short, Q_long）の計算
-        // 積分開始インデックス: ピーク手前 10 ns
-        Int_t k_start = k_peak - n_pre_peak;
-        if (k_start < 0) k_start = 0;
-
-        // Q_shortの積分終了点 (ピーク後 n_post_peak_short ns)
-        Int_t k_short_end = min(_DT5751Length, k_peak + n_post_peak_short);
- 
-        // Q_longの積分終了点 (ピーク後 n_post_peak_long ns)
-        Int_t k_long_end = min(_DT5751Length, k_peak + n_post_peak_long);
- 
-        // ピークトップから積分終了判定ポイントまでの時間差 (ns) の計算
-        t_short = (Double_t)(k_short_end - k_peak) * dt;
-        t_long = (Double_t)(k_long_end - k_peak) * dt;
- 
-        Q_short = 0.0;
-        Q_long = 0.0;
- 
-        // Q_shortの積分
-        for (Int_t k = k_start; k < k_short_end; ++k) {
-            Q_short += (wave[k] / impedance * dt);
-        }
- 
-        // Q_longの積分
-        for (Int_t k = k_start; k < k_long_end; ++k) {
-            Q_long += (wave[k] / impedance * dt);
-        }
-
-        // 4.1 wave2tq互換の固定窓電荷(Q1)の計算
-        Q1 = 0.0;
-        Int_t k_threshold = -1;
-        for (Int_t k = 0; k < _DT5751Length; ++k) {
-            if (k >= n_softtrigger_enable_length) break;
-            if (wave[k] >= threshold) {
-                k_threshold = k;
-                break;
+            sum_wave = 0.0; n_wave = 0;
+            for (Int_t k = 0; k < n_baseline_length; ++k) {
+                if (abs((Double_t)wave_raw[k] - baseline_rough) < threshold) {
+                    sum_wave += (Double_t)wave_raw[k];
+                    n_wave++;
+                }
             }
-        }
-        if (k_threshold != -1) {
-            Int_t k_window_start = k_threshold - n_length_pre_softtrigger;
-            Int_t k_window_end = k_threshold + n_length_post_softtrigger;
-            if (k_window_start < 0) k_window_start = 0;
-            if (k_window_end > _DT5751Length) k_window_end = _DT5751Length;
-            
-            for (Int_t k = k_window_start; k < k_window_end; ++k) {
-                Q1 += (wave[k] / impedance * dt);
-            }
-        }
+            baseline = (n_wave > 0) ? (sum_wave / Double_t(n_wave)) : baseline_rough;
 
-        // 5. PSD パラメータ計算: (Q_long - Q_short) / Q_long
-        if (Q_long > 0.0) {
-            PSD = (Q_long - Q_short) / Q_long;
-        } else {
-            PSD = 0.0;
+            // 反転ベースライン減算波形
+            vector<Double_t> wave_ch1(_DT5751Length);
+            for (Int_t k = 0; k < _DT5751Length; ++k) {
+                wave_ch1[k] = baseline - (Double_t)wave_raw[k];
+            }
+
+            // しきい値を超えたタイミング探索 (T1)
+            Int_t k_th = -1;
+            for (Int_t k = 0; k < n_softtrigger_enable_length; ++k) {
+                if (wave_ch1[k] >= threshold) {
+                    k_th = k;
+                    break;
+                }
+            }
+
+            if (k_th != -1) {
+                // 固定ゲート積算 Q1 の計算
+                Int_t k_w_start = max(0, k_th - n_length_pre_softtrigger);
+                Int_t k_w_end = min(_DT5751Length, k_th + n_length_post_softtrigger);
+                for (Int_t k = k_w_start; k < k_w_end; ++k) {
+                    Q1 += (wave_ch1[k] / impedance * dt);
+                }
+
+                // 線形補間 T1 の計算
+                if (k_th > 0) {
+                    Double_t time_1 = (Double_t)(k_th - 1);
+                    Double_t time_2 = (Double_t)k_th;
+                    Double_t wave_1 = wave_ch1[k_th - 1];
+                    Double_t wave_2 = wave_ch1[k_th];
+                    Double_t slope = (wave_1 - wave_2) / (time_1 - time_2);
+                    Double_t offset = (time_1 * wave_2 - time_2 * wave_1) / (time_1 - time_2);
+                    if (slope != 0.0) {
+                        T1 = (threshold - offset) / slope;
+                    }
+                }
+            }
+
+            // --- 3. PSD 積分用波形処理（デジタル平滑化） ---
+            vector<Double_t> wave_smooth = wave_ch1;
+            if (apply_smoothing) {
+                for (Int_t k = 1; k < _DT5751Length - 1; ++k) {
+                    wave_smooth[k] = (wave_ch1[k - 1] + 2.0 * wave_ch1[k] + wave_ch1[k + 1]) / 4.0;
+                }
+            }
+
+            // ピーク位置探索 (300 ~ 500 ns)
+            Double_t max_val = -99999.0;
+            Int_t k_peak = -1;
+            for (Int_t k = 300; k < 500; ++k) {
+                if (wave_smooth[k] > max_val) {
+                    max_val = wave_smooth[k];
+                    k_peak = k;
+                }
+            }
+
+            // ピークが有意な場合のみ PSD 計算
+            if (k_peak != -1 && max_val >= threshold) {
+                peak_time = (Double_t)k_peak;
+
+                Int_t k_start = max(0, k_peak - n_pre_peak);
+                Int_t k_short_end = min(_DT5751Length, k_peak + n_post_peak_short);
+                Int_t k_long_end = min(_DT5751Length, k_peak + n_post_peak_long);
+
+                t_short = (Double_t)(k_short_end - k_peak) * dt;
+                t_long = (Double_t)(k_long_end - k_peak) * dt;
+
+                // Q_short/Q_long の平滑化電荷積算
+                Double_t q_short_sum = 0.0;
+                Double_t q_long_sum = 0.0;
+                for (Int_t k = k_start; k < k_short_end; ++k) {
+                    q_short_sum += (wave_smooth[k] / impedance * dt);
+                }
+                for (Int_t k = k_start; k < k_long_end; ++k) {
+                    q_long_sum += (wave_smooth[k] / impedance * dt);
+                }
+
+                Q_short = q_short_sum;
+                Q_long = q_long_sum;
+
+                if (Q_long > 0.0) {
+                    PSD = (Q_long - Q_short) / Q_long;
+                }
+            }
         }
 
         psd_tree->Fill();
@@ -264,8 +360,6 @@ int main(int argc, char* argv[]) {
     delete outFile;
     delete file;
 
-    cout << "Finished PSD analysis. Analyzed " << analyzed_count << " CH1 events." << endl;
-    cout << "Results saved to: " << output_path << endl;
-
+    cout << "\nAnalysis complete. Output saved: " << output_path << endl;
     return 0;
 }
