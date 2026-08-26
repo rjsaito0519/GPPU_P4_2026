@@ -17,11 +17,19 @@ using namespace std;
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        cerr << "Usage: " << argv[0] << " <input_psd_root_file>" << endl;
+        cerr << "Usage: " << argv[0] << " <input_psd_root_file> [-q/--q1 q1_min]" << endl;
         return 1;
     }
 
     string input_path = argv[1];
+    Double_t q1_min = -1.0;
+
+    for (int i = 2; i < argc; ++i) {
+        string arg = argv[i];
+        if ((arg == "-q" || arg == "--q1") && i + 1 < argc) {
+            q1_min = stod(argv[++i]);
+        }
+    }
 
     TFile* file = TFile::Open(input_path.c_str(), "READ");
     if (!file || file->IsZombie()) {
@@ -48,8 +56,13 @@ int main(int argc, char* argv[]) {
     h_psd->SetLineColor(kBlack);
     h_psd->SetLineWidth(2);
 
-    // ツリーからPSDをプロット
-    tree->Draw("PSD >> h_psd", "PSD > 0.0");
+    // ツリーからPSDをプロット (エネルギーカットの適用)
+    string cut_cond = "PSD > 0.0";
+    if (q1_min > 0.0) {
+        cut_cond += " && Q1 > " + to_string(q1_min);
+        cout << "Applying energy cut: Q1 > " << q1_min << " pC" << endl;
+    }
+    tree->Draw("PSD >> h_psd", cut_cond.c_str());
 
     // 初期パラメータの自動推定
     // ガンマピークの初期推定 (0.08 ~ 0.16 の範囲の最大値)
