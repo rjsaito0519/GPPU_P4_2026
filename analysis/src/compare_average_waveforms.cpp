@@ -230,7 +230,7 @@ int main(int argc, char* argv[]) {
     }
 
     // ファイルラベルの自動抽出と明示的な差し替え
-    auto get_display_label = [](const string& path) {
+    auto get_display_label = [](const string& path) -> string {
         size_t slash = path.find_last_of("/\\");
         string base = (slash == string::npos) ? path : path.substr(slash + 1);
         size_t dot = base.find_last_of(".");
