@@ -230,7 +230,7 @@ int main(int argc, char* argv[]) {
         TMultiGraph* mg = new TMultiGraph();
         
         Double_t range_min = k * height_step;
-        Double_t range_max = (k == n_ranges - 1) ? (max_height * 5.0) : ((k + 1) * height_step);
+        Double_t range_max = (k == n_ranges - 1) ? max_height : ((k + 1) * height_step);
 
         // 入力パスからベース名 (ファイル名のみ) を抽出
         string file_basename = input_path;
