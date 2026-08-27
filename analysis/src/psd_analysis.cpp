@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
     string output_path = "";
     Int_t n_pre_peak = 10;          // ピーク手前の積分開始オフセット [ns]
     Int_t n_post_peak_short = 10;   // ピーク後のQ_short積分幅 [ns]
-    Int_t n_post_peak_long = 150;   // ピーク後のQ_long積分幅 [ns]
+    Int_t n_post_peak_long = 100;   // ピーク後のQ_long積分幅 [ns]
     Int_t apply_smoothing = 1;      // デジタル平滑化の有効化 (1: On, 0: Off)
     Bool_t quiet = false;           // プログレスバーの非表示フラグ
     Long64_t max_events = -1;       // 最大解析イベント数 (-1: 全件)
